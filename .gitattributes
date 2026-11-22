@@ -1,0 +1,14 @@
+# Keep LF in the repository and in every checkout (also on Windows CI
+# runners), so gofmt and reproducible builds see identical bytes.
+* text=auto eol=lf
+
+# Windows scripts are fine with LF, but keep them explicit.
+*.ps1 text eol=lf
+
+# Binary assets
+*.png binary
+*.ico binary
+*.webp binary
+*.syso binary
+*.msi binary
+*.exe binary
