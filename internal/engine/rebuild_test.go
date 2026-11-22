@@ -9,10 +9,78 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"aurasplit/internal/profile"
 )
+
+func TestRunSuppressesOfflineRebuild(t *testing.T) {
+	old := physicalNetwork
+	defer func() { physicalNetwork = old }()
+	synctest.Test(t, func(t *testing.T) {
+		link := physicalLink{}
+		physicalNetwork = func() (physicalLink, error) { return link, nil }
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		var events *eventLog
+		events, opts := rebuildFakes(t, script{}, func(_ context.Context, name string, report func(ProbeResult)) {
+			if name != "tunnel#1" {
+				return
+			}
+			report(ProbeResult{State: ConnDisconnected, Failures: 3})
+			time.Sleep(time.Second)
+			if strings.Contains(joined(events.get()), "prepare tunnel#2") {
+				t.Error("rebuilt while offline")
+			}
+			link = physicalLink{index: 1, up: true}
+			report(ProbeResult{State: ConnDegraded, Failures: 1})
+			time.Sleep(time.Second)
+			if strings.Contains(joined(events.get()), "prepare tunnel#2") {
+				t.Error("rebuilt before failure threshold")
+			}
+			report(ProbeResult{State: ConnDisconnected, Failures: 3})
+		})
+		var states stateLog
+		opts.OnState = cancelOnNth(2, cancel, &states)
+		if err := Run(ctx, testProfile(t, profile.ProviderWARP), opts); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(joined(events.get()), "prepare tunnel#2") {
+			t.Fatal("no rebuild after persistent failures on restored link")
+		}
+	})
+}
+
+func TestRunDiscardsRecoveredQueuedRebuild(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		events, opts := rebuildFakes(t, script{prepareErr: map[string]error{
+			"tunnel#2": errors.New("temporary preparation failure"),
+		}}, func(_ context.Context, name string, report func(ProbeResult)) {
+			if name != "tunnel#1" {
+				return
+			}
+			report(ProbeResult{State: ConnDisconnected, Failures: 3})
+			time.Sleep(time.Second)
+			report(ProbeResult{State: ConnDisconnected, Failures: 3})
+			time.Sleep(time.Second)
+			report(ProbeResult{State: ConnDisconnected}) // Physical link down invalidates the queued request.
+			time.Sleep(time.Second)
+			report(ProbeResult{State: ConnVerified})
+			time.Sleep(3 * time.Minute)
+			cancel()
+		})
+		minRebuildInterval = 2 * time.Minute
+		if err := Run(ctx, testProfile(t, profile.ProviderWARP), opts); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(joined(events.get()), "prepare tunnel#3") {
+			t.Fatal("stale rebuild executed after recovery")
+		}
+	})
+}
 
 // rebuildFakes installs the fake boxes (installFakes), a permit that logs
 // into the same event list, a fake probe and short rebuild timings.

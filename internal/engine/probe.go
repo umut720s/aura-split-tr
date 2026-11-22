@@ -24,14 +24,16 @@ type Connectivity string
 const (
 	// ConnUnknown: no probe has completed since the tunnel started.
 	ConnUnknown Connectivity = ""
+	// ConnConnecting: the initial WireGuard handshake is still in its grace period.
+	ConnConnecting Connectivity = "VPN_CONNECTING"
 	// ConnVerified: the last probe fetched the trace page through the
 	// WireGuard endpoint (and, for WARP, it reported warp=on or plus).
 	ConnVerified Connectivity = "VPN_CONNECTIVITY_VERIFIED"
 	// ConnDegraded: 1 or 2 consecutive probes failed, or WARP reported
 	// warp=off.
 	ConnDegraded Connectivity = "VPN_DEGRADED"
-	// ConnDisconnected: ProbeDisconnectedAfter or more consecutive probes
-	// failed.
+	// ConnDisconnected: the physical link is down, or ProbeDisconnectedAfter
+	// or more consecutive probes failed.
 	ConnDisconnected Connectivity = "VPN_DISCONNECTED"
 )
 
@@ -40,7 +42,8 @@ const (
 	ProbeURL               = "https://www.cloudflare.com/cdn-cgi/trace"
 	ProbeTimeout           = 10 * time.Second
 	ProbeBodyLimit         = 4 << 10
-	ProbeFirstDelay        = 3 * time.Second
+	ProbeFirstDelay        = 10 * time.Second
+	ProbeStartupGrace      = 90 * time.Second
 	ProbeInterval          = 5 * time.Minute
 	ProbeRetryMin          = 30 * time.Second
 	ProbeRetryMax          = ProbeInterval
@@ -403,31 +406,71 @@ func nextResult(prev ProbeResult, err error, now time.Time) ProbeResult {
 // probeSchedule holds the delays; tests shorten them.
 type probeSchedule struct {
 	first, interval, retryMin, retryMax time.Duration
+	grace                               time.Duration
 }
 
-var defaultProbeSchedule = probeSchedule{ProbeFirstDelay, ProbeInterval, ProbeRetryMin, ProbeRetryMax}
+var defaultProbeSchedule = probeSchedule{ProbeFirstDelay, ProbeInterval, ProbeRetryMin, ProbeRetryMax, ProbeStartupGrace}
 
 // runProber probes until ctx is cancelled: first after s.first, then every
 // s.interval while it succeeds; after a failure with a doubling delay from
-// s.retryMin up to s.retryMax.
+// s.retryMin up to s.retryMax. Startup failures retry every 10 seconds.
+// Read-only link polling interrupts the normal wait on network changes.
 func runProber(ctx context.Context, c *http.Client, url string, requireWARP bool, s probeSchedule, report func(ProbeResult)) {
 	var cur ProbeResult
+	started := time.Now()
+	link, linkErr := physicalNetwork()
+	var lastProbe time.Time
+	poll := time.NewTicker(networkCheckInterval)
+	defer poll.Stop()
 	delay := s.first
 	retry := s.retryMin
+	if s.grace > 0 {
+		report(ProbeResult{State: ConnConnecting, Time: started.UTC()})
+	}
 	for {
 		t := time.NewTimer(delay)
-		select {
-		case <-ctx.Done():
-			t.Stop()
-			return
-		case <-t.C:
+	wait:
+		for {
+			select {
+			case <-ctx.Done():
+				t.Stop()
+				return
+			case <-t.C:
+				break wait
+			case <-poll.C:
+				next, err := physicalNetwork()
+				if err != nil {
+					continue
+				}
+				changed := linkErr != nil || next != link
+				link, linkErr = next, nil
+				if !link.up {
+					if cur.State != ConnDisconnected || changed {
+						cur = ProbeResult{State: ConnDisconnected, Detail: "fiziksel bağlantı yok", Time: time.Now().UTC(), Verified: cur.Verified}
+						report(cur)
+					}
+				} else if changed {
+					t.Reset(extraProbeDelay(lastProbe, time.Now()))
+				}
+			}
 		}
+		if linkErr == nil && !link.up {
+			cur = ProbeResult{State: ConnDisconnected, Detail: "fiziksel bağlantı yok", Time: time.Now().UTC(), Verified: cur.Verified}
+			report(cur)
+			delay = networkCheckInterval
+			continue
+		}
+		lastProbe = time.Now()
 		err := probeOnce(ctx, c, url, requireWARP)
 		if ctx.Err() != nil {
 			return
 		}
-		cur = nextResult(cur, err, time.Now().UTC())
+		cur = startupResult(cur, err, started, time.Now().UTC(), s.grace)
 		report(cur)
+		if cur.State == ConnConnecting {
+			delay = networkCheckInterval
+			continue
+		}
 		if err == nil {
 			delay, retry = s.interval, s.retryMin
 			continue

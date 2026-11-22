@@ -403,7 +403,8 @@ Proton VPN WireGuard yapılandırması nasıl indirilir
    - NetShield'i kapalı bırakmanız önerilir,
    - Bir sunucu seçin (Free kullanıcılar ücretsiz sunuculardan birini seçebilir),
    - "Create" / "Download" ile .conf dosyasını indirin.
-4. İndirilen dosyanın yolunu aşağıya yazın ya da dosyayı bu pencereye sürükleyip bırakın.
+4. Açılan dosya seçicide indirdiğiniz .conf dosyasını seçin.
+   Alternatif: "Yol olarak kopyala" ile yolu kopyalayıp aşağıya yapıştırın.
 
 Not: Bu araç çalışırken Proton VPN uygulamasının kendi bağlantısını açmayın.
 `)
@@ -413,7 +414,7 @@ Not: Bu araç çalışırken Proton VPN uygulamasının kendi bağlantısını a
 func importConf() (profile.WireGuard, bool) {
 	for attempt := 0; attempt < 3; attempt++ {
 		fmt.Println()
-		path := cleanPath(readLine(".conf dosyasının yolu (boş bırakırsanız menüye döner): "))
+		path := chooseConfPath(pickConfFile, readLine)
 		if path == "" {
 			return profile.WireGuard{}, false
 		}
@@ -422,7 +423,7 @@ func importConf() (profile.WireGuard, bool) {
 		}
 		data, err := readSmallFile(path, maxConfSize)
 		if err != nil {
-			fail("Dosya okunamadı. Tam yolu yazdığınızdan ya da dosyayı sürükleyip bıraktığınızdan emin olun.", err)
+			fail("Dosya okunamadı. Dosyayı seçin veya tam yolunu yapıştırın (Yol olarak kopyala).", err)
 			continue
 		}
 		wg, err := provider.ParseWireGuardConf(data)

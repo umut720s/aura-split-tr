@@ -254,9 +254,10 @@ Her durum ayrı satırdadır; birbirinden bağımsızdır ve aynı anda EVET ola
 |---|---|---|
 | `SERVICE_RUNNING` | SCM hizmeti *çalışıyor* gösteriyor | `QueryServiceStatusEx` |
 | `TUNNEL_INITIALIZED` | normal tünel yapılandırması başlatıldı (`tunnel-started`) | durum dosyası (PID + başlangıç zamanı + 90 sn heartbeat ile doğrulanmış) |
+| `VPN_CONNECTING` | ilk 90 sn içinde, ilk başarıya kadar bağlanıyor; hatalar normal eşiğe sayılmaz | durum dosyası |
 | `VPN_CONNECTIVITY_VERIFIED` | son deneme tünelin içinden başarılı | durum dosyası |
 | `VPN_DEGRADED` | art arda 1–2 deneme başarısız, ya da WARP `warp=off` döndü | durum dosyası |
-| `VPN_DISCONNECTED` | art arda ≥ 3 deneme başarısız | durum dosyası |
+| `VPN_DISCONNECTED` | fiziksel bağlantı yok veya art arda ≥ 3 deneme başarısız | durum dosyası |
 | `PROTECTION_ACTIVE` | kalıcı WFP politikası (sağlayıcı + alt katman) yüklü; ek olarak dinamik tünel izninin açık / açık-EKSİK (N/M program) / kapalı olduğu ve `Kapsam: TAM/EKSİK` (neden) | canlı WFP sorgusu (`Installed`), olmazsa hizmetin bildirdiği; kapsam ve izin hizmetin bildirdiği |
 
 VPN_* durumları yalnızca `TUNNEL_INITIALIZED` iken anlamlıdır; tünel durumu değişince
@@ -281,8 +282,9 @@ sıfırlanır. "Doğrulandı" asla süreç varlığından çıkarılmaz.
   yalnızca geçerli adres mi diye denetlenir, saklanmaz/günlüğe yazılmaz. Hata ayrıntısı
   adres içermeyen kısa bir nedendir (`timeout`, `tls error`, `http status N`, ...).
 - WARP profilinde başarı için `warp=on` veya `warp=plus` gerekir.
-- Zamanlama: tünel başladıktan 3 sn sonra ilk deneme; başarıdan sonra 5 dk; hatadan
+- Zamanlama: tünel başladıktan 10 sn sonra ilk deneme; ilk 90 sn içinde ilk başarıya kadar hatalarda 10 sn arayla tekrar; başarıdan sonra 5 dk; hatadan
   sonra 30 sn'den başlayıp ikiye katlanarak en fazla 5 dk.
+- IPv4 fiziksel varsayılan arayüz ve bağlantı durumu 10 sn arayla, ağ trafiği olmadan okunur. Değişiklikte ek deneme yapılır (en sık 10 sn). Fiziksel bağlantı yokken durum hemen `VPN_DISCONNECTED` olur ve tünel yeniden kurulmaz; bağlantı dönünce deneme yapılır.
 
 ## Dosya güveni
 
@@ -437,7 +439,7 @@ sıfırlanır. "Doğrulandı" asla süreç varlığından çıkarılmaz.
 | `internal/paths` | ortak + engine ajanı | `DataDir`, `InstallDir`, `ProfilePath`, `LogPath`, `StatePath`, `InstalledExePath`; `EnsureSecureDir`, `WriteSecureFile`, `WriteSecureFileInDir`, `StageSecureFile`, `OpenSecureAppend`, `ReplaceFile`, `IsTrustedAppDir`, `IsTrustedFile`, `CleanDataDir` (`CleanResult`), `QuarantineInfix` (SDDL `O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)`; `InstallSDDL` = MSI'nin kurulum klasörüne koyduğu tanımlayıcı, ek olarak `BU` okuma/çalıştırma) |
 | `internal/logfile` | engine ajanı | `Open(dir, name string, maxSize int64, backups int) (*Writer, error)` — kesin boyut sınırlı döndürmeli günlük; `Degraded() bool`; `Scrub`/`ScrubString` (kullanıcı yolları) |
 | `internal/provider` | Codex | `ParseWireGuardConf(data []byte) (profile.WireGuard, error)`; `RegisterWARP(ctx context.Context, c *http.Client) (profile.WireGuard, error)` |
-| `internal/engine` | engine ajanı | `BuildConfig(p *profile.Profile) ([]byte, error)` (ad uç noktası çözülemezse `ErrEndpointUnresolved`); `BuildBlockConfig`; `Check(p *profile.Profile) error`; `Run(ctx context.Context, p *profile.Profile, opts RunOptions) error` (ctx iptaline kadar bloklar; `RunOptions{LogWriter, Debug, OnState, RetryDelay, OnTunnelUp func() (io.Closer, error), OnConnectivity func(ProbeResult), ProbeURL}`; durumlar `StateStarting`, `StateTunnelStarted`, `StateBlocking`, `StateError`, `StateStopped`; bağlantı `ConnVerified`, `ConnDegraded`, `ConnDisconnected`) |
+| `internal/engine` | engine ajanı | `BuildConfig(p *profile.Profile) ([]byte, error)` (ad uç noktası çözülemezse `ErrEndpointUnresolved`); `BuildBlockConfig`; `Check(p *profile.Profile) error`; `Run(ctx context.Context, p *profile.Profile, opts RunOptions) error` (ctx iptaline kadar bloklar; `RunOptions{LogWriter, Debug, OnState, RetryDelay, OnTunnelUp func() (io.Closer, error), OnConnectivity func(ProbeResult), ProbeURL}`; durumlar `StateStarting`, `StateTunnelStarted`, `StateBlocking`, `StateError`, `StateStopped`; bağlantı `ConnConnecting`, `ConnVerified`, `ConnDegraded`, `ConnDisconnected`) |
 | `internal/wfp` | engine ajanı | `Policy` arayüzü: `Apply(paths []string, mode ApplyMode) (ApplyResult, error)` (`AddOnly`/`Authoritative`; `*IncompleteError`/`ErrIncomplete` geçerli sonuçla döner), `PermitOnTunnel(luid uint64, paths []string) (Permit, error)` (`Permit`: `io.Closer` + `Paths()`), `RemoveAll() error`, `Installed() (bool, int, error)`; `New() *Firewall`; `NewGuard(...)` (`Reconcile`, `TunnelUp`, `Run(ctx, interval, kick)`, `Status`); `Discover`, `DiscoverIn`, `ProfileDirs`, `ErrCapReached`, `WatchTargets`, `WatchTargetsIn`, `RunWatcher`, `TunnelLUID`; `ProviderKey`, `SubLayerKey`, `SubLayerWeight` |
 | `internal/service` | engine ajanı | `IsAdmin() bool`; `IsWindowsService() (bool, error)`; `Verify(exePath string) error` (MSI'nin kaydettiği hizmeti doğrular: tırnaklı komut satırı, LocalSystem, kendi süreci, `BFE`; hizmeti CLI **oluşturmaz/silmez**); `EnableNonCrashRecovery() error`; `SetAutoStart(bool) error`; `Disable() error`; `ScrubEventText`; hatalar `ErrNotInstalled`, `ErrNotRunning`, `ErrStartPending`, `ErrFatal` (gözetici durur, hizmet sıfırdan farklı kodla çıkar); `Start() error`; `StartWait(timeout) error`; `Stop() error`; `Status() (string, error)`; `StatusPID() (string, uint32, error)`; `RunService(run func(ctx context.Context) error) error` |
 | `cmd/aurasplit` | CLI ajanı | `setup` (yalnızca kurulu kopyadan; yapılandırma), `status`, `start`, `stop`, `restart`, `disable`, `recover`, `uninstall` (yalnızca MSI ile kaldırmayı anlatır), `recover --msi` / `start --msi` / `uninstall --msi` (Windows Installer bağlamı, etkileşimsiz), `run [--debug]` (ön planda hata ayıklama, konsola günlük), `service` (gizli; SCM çağırır), `version` |

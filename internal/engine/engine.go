@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	box "github.com/sagernet/sing-box"
@@ -445,10 +446,15 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 		report(StateTunnelStarted, "")
 		delay = initialDelay
 
-		rebuild := make(chan string, 1)
-		trigger := func(reason string) {
+		type rebuildRequest struct {
+			reason       string
+			connectivity bool
+		}
+		var connectivityLost atomic.Bool
+		rebuild := make(chan rebuildRequest, 1)
+		trigger := func(reason string, connectivity bool) {
 			select {
-			case rebuild <- reason:
+			case rebuild <- rebuildRequest{reason, connectivity}:
 			default: // one pending trigger is enough
 			}
 		}
@@ -461,8 +467,10 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 			}
 			onResult := func(r ProbeResult) {
 				opts.OnConnectivity(r)
-				if r.State == ConnDisconnected {
-					trigger(fmt.Sprintf("VPN connectivity lost (%d consecutive probe failures)", r.Failures))
+				lost := r.State == ConnDisconnected && r.Failures >= ProbeDisconnectedAfter
+				connectivityLost.Store(lost)
+				if lost {
+					trigger(fmt.Sprintf("VPN connectivity lost (%d consecutive probe failures)", r.Failures), true)
 				}
 			}
 			go func() {
@@ -484,7 +492,7 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 				case <-t.C:
 				}
 				if v6, err := hostIPv6(); err == nil && v6 != builtV6 {
-					trigger(fmt.Sprintf("host IPv6 capability changed (built for %v, now %v)", builtV6, v6))
+					trigger(fmt.Sprintf("host IPv6 capability changed (built for %v, now %v)", builtV6, v6), false)
 				}
 			}
 		}()
@@ -518,11 +526,11 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 		}
 
 		for {
-			var reason string
+			var request rebuildRequest
 			select {
 			case <-ctx.Done():
 				return nil, shutdown()
-			case reason = <-rebuild:
+			case request = <-rebuild:
 			}
 			if wait := rebuildWait(lastRebuild, time.Now(), minRebuildInterval); wait > 0 {
 				t := time.NewTimer(wait)
@@ -533,6 +541,12 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 				case <-t.C:
 				}
 			}
+			// Discard a queued probe rebuild if connectivity recovered while
+			// waiting for the rate limit, or the physical link went down.
+			if (request.connectivity && !connectivityLost.Load()) || !canRebuild() {
+				continue
+			}
+			reason := request.reason
 			lastRebuild = time.Now()
 			logf("WARN", "rebuilding the tunnel: "+reason)
 			next, err := prepareTunnel()

@@ -12,6 +12,7 @@ import (
 // Tests never resolve real host names or read the host's tables: by
 // default resolution fails and the host has no IPv6.
 func init() {
+	physicalNetwork = func() (physicalLink, error) { return physicalLink{index: 1, up: true}, nil }
 	resolvePeerHost = func(string, bool) (netip.Addr, error) { return netip.Addr{}, errors.New("no network in tests") }
 	hostIPv6 = func() (bool, error) { return false, nil }
 }

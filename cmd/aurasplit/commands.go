@@ -140,7 +140,9 @@ func describeStatus(in statusInput, loc *time.Location) []string {
 	case !tunnel:
 		add("VPN bağlantısı:            denetlenmiyor (tünel çalışmıyor)")
 	case ts.Connectivity == "":
-		add("VPN bağlantısı:            henüz doğrulanmadı (ilk deneme tünel başladıktan birkaç saniye sonra)")
+		add("VPN bağlantısı:            henüz doğrulanmadı (ilk deneme tünel başladıktan yaklaşık 10 saniye sonra)")
+	case ts.Connectivity == string(engine.ConnConnecting):
+		add("VPN bağlantısı:            VPN_CONNECTING — bağlanıyor")
 	default:
 		line := fmt.Sprintf("VPN bağlantısı:            %s (son deneme %s", ts.Connectivity, when(ts.ConnectivityTime))
 		if !ts.ConnectivityOK.IsZero() {
