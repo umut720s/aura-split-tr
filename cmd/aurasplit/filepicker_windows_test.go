@@ -8,9 +8,52 @@ import (
 	"testing"
 	"time"
 	"unicode/utf16"
+	"unsafe"
 
 	"aurasplit/internal/engine"
 )
+
+func TestOpenFileNameAMD64Layout(t *testing.T) {
+	if unsafe.Sizeof(uintptr(0)) != 8 {
+		t.Skip("Windows 64-bit ABI")
+	}
+	var of openFileName
+	if unsafe.Sizeof(of) != 152 {
+		t.Fatalf("OPENFILENAMEW size = %d, want 152", unsafe.Sizeof(of))
+	}
+	for _, field := range []struct {
+		name string
+		got  uintptr
+		want uintptr
+	}{
+		{"Owner", unsafe.Offsetof(of.Owner), 8},
+		{"Instance", unsafe.Offsetof(of.Instance), 16},
+		{"Filter", unsafe.Offsetof(of.Filter), 24},
+		{"CustomFilter", unsafe.Offsetof(of.CustomFilter), 32},
+		{"MaxCustomFilter", unsafe.Offsetof(of.MaxCustomFilter), 40},
+		{"FilterIndex", unsafe.Offsetof(of.FilterIndex), 44},
+		{"File", unsafe.Offsetof(of.File), 48},
+		{"MaxFile", unsafe.Offsetof(of.MaxFile), 56},
+		{"FileTitle", unsafe.Offsetof(of.FileTitle), 64},
+		{"MaxFileTitle", unsafe.Offsetof(of.MaxFileTitle), 72},
+		{"InitialDir", unsafe.Offsetof(of.InitialDir), 80},
+		{"Title", unsafe.Offsetof(of.Title), 88},
+		{"Flags", unsafe.Offsetof(of.Flags), 96},
+		{"FileOffset", unsafe.Offsetof(of.FileOffset), 100},
+		{"FileExtension", unsafe.Offsetof(of.FileExtension), 102},
+		{"DefaultExtension", unsafe.Offsetof(of.DefaultExtension), 104},
+		{"CustomData", unsafe.Offsetof(of.CustomData), 112},
+		{"Hook", unsafe.Offsetof(of.Hook), 120},
+		{"Template", unsafe.Offsetof(of.Template), 128},
+		{"Reserved", unsafe.Offsetof(of.Reserved), 136},
+		{"ReservedSize", unsafe.Offsetof(of.ReservedSize), 144},
+		{"FlagsEx", unsafe.Offsetof(of.FlagsEx), 148},
+	} {
+		if field.got != field.want {
+			t.Errorf("%s offset = %d, want %d", field.name, field.got, field.want)
+		}
+	}
+}
 
 func TestConfFilter(t *testing.T) {
 	got := string(utf16.Decode(confFilter()))

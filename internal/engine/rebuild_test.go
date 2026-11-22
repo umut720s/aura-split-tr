@@ -113,6 +113,51 @@ func rebuildFakes(t *testing.T, s script, probe func(ctx context.Context, name s
 
 type closerFunc func() error
 
+func TestRunRechecksRebuildAfterPreparation(t *testing.T) {
+	for _, change := range []string{"recovered", "offline"} {
+		t.Run(change, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				old := physicalNetwork
+				defer func() { physicalNetwork = old }()
+				link := physicalLink{index: 1, up: true}
+				physicalNetwork = func() (physicalLink, error) { return link, nil }
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				prepared := make(chan struct{})
+				events, opts := rebuildFakes(t, script{}, func(_ context.Context, name string, report func(ProbeResult)) {
+					if name != "tunnel#1" {
+						return
+					}
+					report(ProbeResult{State: ConnDisconnected, Failures: 3})
+					<-prepared
+					if change == "recovered" {
+						report(ProbeResult{State: ConnVerified})
+					} else {
+						link = physicalLink{}
+					}
+				})
+				inner := prepareBox
+				prepareBox = func(p *profile.Profile, m Mode, l string, pump *logPump) (runner, error) {
+					r, err := inner(p, m, l, pump)
+					if inst, ok := r.(*pipeRunner); ok && inst.name == "tunnel#2" {
+						close(prepared)
+						time.Sleep(time.Second)
+					}
+					return r, err
+				}
+				go func() { time.Sleep(3 * time.Second); cancel() }()
+				if err := Run(ctx, testProfile(t, profile.ProviderWARP), opts); err != nil {
+					t.Fatal(err)
+				}
+				got := joined(events.get())
+				if strings.Contains(got, "start tunnel#2") || !strings.Contains(got, "close tunnel#2") {
+					t.Fatalf("obsolete replacement was not discarded: %s", got)
+				}
+			})
+		})
+	}
+}
+
 func (f closerFunc) Close() error { return f() }
 
 // cancelOnNth cancels after the n-th StateTunnelStarted and records states.

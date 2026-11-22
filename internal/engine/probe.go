@@ -427,57 +427,81 @@ func runProber(ctx context.Context, c *http.Client, url string, requireWARP bool
 	if s.grace > 0 {
 		report(ProbeResult{State: ConnConnecting, Time: started.UTC()})
 	}
+	t := time.NewTimer(delay)
+	defer t.Stop()
+	var done chan error
+	var cancelProbe context.CancelFunc
+	var stale bool
+	defer func() {
+		if cancelProbe != nil {
+			cancelProbe()
+			<-done // One bounded, context-aware request; never leave a probe behind.
+		}
+	}()
 	for {
-		t := time.NewTimer(delay)
-	wait:
-		for {
-			select {
-			case <-ctx.Done():
-				t.Stop()
-				return
-			case <-t.C:
-				break wait
-			case <-poll.C:
-				next, err := physicalNetwork()
-				if err != nil {
-					continue
+		select {
+		case <-ctx.Done():
+			return
+		case <-poll.C:
+			next, err := physicalNetwork()
+			if err != nil {
+				continue
+			}
+			changed := linkErr != nil || next != link
+			link, linkErr = next, nil
+			if changed && done != nil {
+				stale = true
+				cancelProbe()
+			}
+			if !link.up {
+				if cur.State != ConnDisconnected || changed {
+					cur = ProbeResult{State: ConnDisconnected, Detail: "fiziksel bağlantı yok", Time: time.Now().UTC(), Verified: cur.Verified}
+					report(cur)
 				}
-				changed := linkErr != nil || next != link
-				link, linkErr = next, nil
-				if !link.up {
-					if cur.State != ConnDisconnected || changed {
-						cur = ProbeResult{State: ConnDisconnected, Detail: "fiziksel bağlantı yok", Time: time.Now().UTC(), Verified: cur.Verified}
-						report(cur)
-					}
-				} else if changed {
+			} else if changed && done == nil {
+				t.Reset(extraProbeDelay(lastProbe, time.Now()))
+			}
+		case <-t.C:
+			if linkErr == nil && !link.up {
+				cur = ProbeResult{State: ConnDisconnected, Detail: "fiziksel bağlantı yok", Time: time.Now().UTC(), Verified: cur.Verified}
+				report(cur)
+				t.Reset(networkCheckInterval)
+				continue
+			}
+			lastProbe = time.Now()
+			probeCtx, cancel := context.WithCancel(ctx)
+			cancelProbe = cancel
+			done = make(chan error, 1)
+			go func(result chan<- error) { result <- probeOnce(probeCtx, c, url, requireWARP) }(done)
+		case err := <-done:
+			cancelProbe()
+			cancelProbe, done = nil, nil
+			if ctx.Err() != nil {
+				return
+			}
+			if stale {
+				stale = false
+				if link.up {
 					t.Reset(extraProbeDelay(lastProbe, time.Now()))
+				} else {
+					t.Reset(networkCheckInterval)
+				}
+				continue
+			}
+			cur = startupResult(cur, err, started, time.Now().UTC(), s.grace)
+			report(cur)
+			switch {
+			case cur.State == ConnConnecting:
+				delay = networkCheckInterval
+			case err == nil:
+				delay, retry = s.interval, s.retryMin
+			default:
+				delay = retry
+				if retry *= 2; retry > s.retryMax {
+					retry = s.retryMax
 				}
 			}
-		}
-		if linkErr == nil && !link.up {
-			cur = ProbeResult{State: ConnDisconnected, Detail: "fiziksel bağlantı yok", Time: time.Now().UTC(), Verified: cur.Verified}
-			report(cur)
-			delay = networkCheckInterval
-			continue
-		}
-		lastProbe = time.Now()
-		err := probeOnce(ctx, c, url, requireWARP)
-		if ctx.Err() != nil {
-			return
-		}
-		cur = startupResult(cur, err, started, time.Now().UTC(), s.grace)
-		report(cur)
-		if cur.State == ConnConnecting {
-			delay = networkCheckInterval
-			continue
-		}
-		if err == nil {
-			delay, retry = s.interval, s.retryMin
-			continue
-		}
-		delay = retry
-		if retry *= 2; retry > s.retryMax {
-			retry = s.retryMax
+			t.Reset(delay)
 		}
 	}
 }

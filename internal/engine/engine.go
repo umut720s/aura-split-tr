@@ -556,6 +556,16 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 				logf("ERROR", "tunnel rebuild preparation failed, keeping the current tunnel: "+err.Error())
 				continue
 			}
+			// Preparation can resolve DNS and build the configuration while
+			// probes and link monitoring continue. Revalidate before teardown.
+			if ctx.Err() != nil || (request.connectivity && !connectivityLost.Load()) || !canRebuild() {
+				if cerr := closeBounded(next); errors.Is(cerr, ErrCloseTimeout) {
+					stopWatchers()
+					_, _ = closeCurrent()
+					return nil, terminal(cerr)
+				}
+				continue
+			}
 			stopWatchers()
 			permitErr, closeErr := closeCurrent()
 			if errors.Is(closeErr, ErrCloseTimeout) {

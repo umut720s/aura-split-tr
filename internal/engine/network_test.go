@@ -134,3 +134,64 @@ func TestProberGraceClock(t *testing.T) {
 		}
 	})
 }
+
+func TestProberPollsDuringProbe(t *testing.T) {
+	old := physicalNetwork
+	defer func() { physicalNetwork = old }()
+	synctest.Test(t, func(t *testing.T) {
+		link := physicalLink{index: 1, up: true}
+		physicalNetwork = func() (physicalLink, error) { return link, nil }
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		var results []ProbeResult
+		calls := 0
+		client := &http.Client{Transport: probeTransport(func(*http.Request) (*http.Response, error) {
+			calls++
+			// A response already in flight may arrive after the link went down.
+			time.Sleep(10 * time.Second)
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("ip=192.0.2.1\nwarp=on\n")), Header: make(http.Header)}, nil
+		})}
+		schedule := defaultProbeSchedule
+		schedule.first = 15 * time.Second
+		go runProber(ctx, client, ProbeURL, true, schedule, func(r ProbeResult) { results = append(results, r) })
+		time.Sleep(16 * time.Second)
+		synctest.Wait()
+		link = physicalLink{}
+		time.Sleep(4 * time.Second)
+		synctest.Wait()
+		if calls != 1 || results[len(results)-1].State != ConnDisconnected {
+			t.Errorf("link monitor blocked by probe: calls=%d results=%v", calls, results)
+		}
+		time.Sleep(6 * time.Second)
+		synctest.Wait()
+		if results[len(results)-1].State != ConnDisconnected {
+			t.Fatalf("stale probe overwrote link-down state: %v", results)
+		}
+	})
+}
+
+func TestProberJoinsCancelledProbe(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		finished := false
+		client := &http.Client{Transport: probeTransport(func(r *http.Request) (*http.Response, error) {
+			<-r.Context().Done()
+			finished = true
+			return nil, r.Context().Err()
+		})}
+		done := make(chan struct{})
+		var results []ProbeResult
+		go func() {
+			defer close(done)
+			runProber(ctx, client, ProbeURL, true, defaultProbeSchedule, func(r ProbeResult) { results = append(results, r) })
+		}()
+		time.Sleep(11 * time.Second)
+		synctest.Wait()
+		cancel()
+		<-done
+		if !finished || len(results) != 1 || results[0].State != ConnConnecting {
+			t.Fatalf("probe not joined or result reported after cancellation: finished=%v results=%v", finished, results)
+		}
+	})
+}
