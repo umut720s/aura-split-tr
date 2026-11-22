@@ -1,5 +1,30 @@
 # Güvenlik / Security
 
+## Canlı doğrulama kapsamı — 22 Kasım 2026
+
+Tüm canlı testler **tek Windows 11 x64 PC, IPv4-only Ethernet, Kaspersky Plus
+açık, Authenticode imzasız beta** ile yapıldı.
+[Canlı test kaydı (run 1–3)](docs/testing/phase3_live_results_2026-11-22.md).
+
+| Kategori | Güvenlik açısından gözlem / sınır |
+|---|---|
+| **Gözlendi — Discord** | Proton, WARP ve genel WireGuard (genel seçenekte Proton `.conf`): `Get-NetTCPConnection` örneklemesinde kurulmuş Discord TCP soketlerinin yerel adresi TUN `172.19.0.1`. Ses katılımı kullanıcı tarafından doğrulandı; UDP yolu çıkarımdır, paket yakalanmadı. |
+| **Gözlendi — fail-closed** | `stop` (25 sn), `taskkill` (~4–5 sn SCM yeniden başlatma aralığı), ~40 sn fiziksel ağ kesintisi: saniyelik soket örneklemesinde TUN dışında 0 Discord TCP soketi. **Paket yakalama değildir; UDP ve DNS yakalanmadı.** |
+| **Gözlendi — açılış** | Hizmet etkin yeniden başlatmada hizmet/tünel açılıştan ~12 sn sonra hazır; kullanıcı Discord'u açınca TCP TUN'da. Açılış penceresinde sızıntı yakalaması yok. |
+| **Gözlendi — yaşam döngüsü** | `disable`/`start`, MSI kurulum/yükseltme/kaldırma başarılı. Kaldırma sonrası `netsh wfp show filters/state`: 0 AURA sağlayıcı filtresi/alt katmanı; IP adresleri, DNS sunucuları ve rotalar kurulum öncesi kayıtla aynı; `%ProgramData%\AuraSplitTR` (özel anahtar) silindi. Geçersiz yapılandırma çalışan profil/WFP/TUN yönlendirmesini değiştirmeden reddedildi. |
+| **Henüz test edilmedi** | Paket yakalamayla DNS/IPv6/UDP, açılış penceresi, tarayıcı/ECH sızıntıları; zorlanmış kaldırma/yükseltme hatasında MSI geri alma; CPU ölçümü; yerel IPv6 bağlantılı makineler; diğer antivirüsler; birden fazla makine. |
+| **Uygulandı, canlı test edilmedi** | Run 3 sonrası dosya seçici, `VPN_CONNECTING` başlangıç toleransı, ağ-değişimi probe düzeltmesi. Run 3'te durum ~40 sn kesintiyi yansıtmadı. |
+
+Canlı testlerde bulunan ve düzeltilenler:
+
+- IPv6 olmayan makinede WireGuard bind: bağlantı yolu düzeltildi, canlıda yeniden doğrulandı.
+- Tarayıcı IPv6 bağlantı kaybı: makineye uygun TUN/DNS yapılandırması düzeltildi, canlıda yeniden doğrulandı.
+- WARP sunucu adı uç noktası: IP çözümlemesi düzeltildi, canlıda yeniden doğrulandı.
+- Kendi kendini kuran exe'nin AV tarafından bekletilmesi: MSI'ye geçildi; aynı PC'deki MSI denemelerinde AV uyarısı/başlangıç takılması gözlenmedi.
+
+Beta **üretime hazır değildir**; herkese açık sürüm kararı bakımcıya aittir.
+Alttaki teknik açıklamalar tasarımı anlatır; yukarıdaki gözlem sınırlarını genişletmez.
+
 ## Tehdit modeli (özet)
 
 ### Korunanlar
@@ -130,10 +155,9 @@
   silinip yeniden eklenir. Politika bütçesi: mevcut + önerilen toplam en fazla 256 program,
   profil başına 32; aşılırsa yeni programlar eklenmez, kapsam "EKSİK" gösterilir ve var olan
   kurallar yer açmak için silinmez (dinamik izin de aynı bütçeyle sınırlıdır).
-  **NOT TESTED:** gerçek WFP çağrıları bu makinede çalıştırılmadı; yalnızca sahte bir
-  arka uçla birim testleri ve WFP çağrısı yapmayan yapı (marshalling) testleri var.
-  Fail-closed davranışının hiçbir kısmı (aşağıdaki pencereler dahil) gerçek bir ağda
-  **doğrulanmadı**. Yetkili bir yönetici testi gerekir.
+  Gerçek WFP kuralları yukarıdaki stop/crash/ağ kesintisi senaryolarında TCP soket
+  düzeyinde denendi. Bu gözlem, UDP/DNS/IPv6, açılış penceresi veya aşağıdaki tüm
+  mimari pencereler için paket düzeyinde sızıntı doğrulaması değildir.
 - **Tünel başlatılamazsa fail-closed.** Tünel başlatılamazsa (ör. açılışta ağ yok,
   sunucu adı çözülemiyor) hizmet aynı TUN arayüzüyle Discord trafiğini ve Discord DNS
   sorgularını **reddeden** bir yapılandırma çalıştırır ve tüneli yeniden dener. Bir
@@ -255,6 +279,28 @@ sahibi olarak anılırsınız. Desteklenen sürüm: yalnızca en son yayımlanan
 
 ### English
 
+Live validation (22 November 2026): **one Windows 11 x64 PC, IPv4-only Ethernet,
+Kaspersky Plus active, unsigned beta**. [Live runs 1–3](docs/testing/phase3_live_results_2026-11-22.md).
+
+| Category | Security observation / limit |
+|---|---|
+| **Observed — Discord** | Proton, WARP and generic WireGuard (Proton `.conf` in generic option): established Discord TCP sockets sampled with `Get-NetTCPConnection` had TUN local address `172.19.0.1`. Voice joined (user-observed); UDP path inferred, not packet-captured. |
+| **Observed — fail-closed** | Per-second socket sampling: 0 Discord TCP sockets outside TUN during `stop` (25 s), `taskkill` (~4–5 s until SCM restart), ~40 s physical network outage. **Not packet capture; UDP and DNS not captured.** |
+| **Observed — reboot** | Service enabled: service/tunnel up ~12 s after boot; Discord TCP via TUN after user opened it. No boot-window leak capture. |
+| **Observed — lifecycle/config** | `disable`/`start`, MSI install/upgrade/uninstall passed. After uninstall: 0 AURA provider filters/sublayer in `netsh wfp show filters/state`; IP addresses, DNS servers and routes identical to pre-install capture; `%ProgramData%\AuraSplitTR` (private key) removed. Invalid config rejected without changing running profile/WFP/TUN routing. |
+| **Not yet tested** | Packet-capture leaks (DNS/IPv6/UDP, boot window, browser/ECH); forced-failure MSI uninstall/upgrade rollback; CPU measurement; native IPv6 hosts; other AVs; multiple machines. |
+| **Implemented, not live-tested** | Post-run-3 file picker, `VPN_CONNECTING` start-up grace, network-change probe. Run 3 status missed the ~40 s outage. |
+
+Live-test fixes:
+
+- IPv6-less host WireGuard bind: connection path fixed, re-verified live.
+- Browser IPv6 outage: host-aware TUN/DNS configuration fixed, re-verified live.
+- WARP host-name endpoint: IP resolution fixed, re-verified live.
+- AV hold on self-install: moved to MSI; no AV alert/start-up hold observed in MSI runs on the same PC.
+
+**Not production-ready**; public release is the maintainer's decision. Technical
+descriptions below express design, not additional measured guarantees.
+
 Please report vulnerabilities **privately**, not as a public issue, discussion
 or pull request:
 
@@ -270,8 +316,8 @@ within 7 days, triage within 14 days, fix and coordinated disclosure within
 
 Known limitations (English summary): persistent WFP filters block the discovered
 Discord executables outside the tunnel also while the service is stopped, crashed or
-not yet started (NOT TESTED on a real machine and NOT verified in a real network;
-unit-tested with a fake backend only). Filters that WFP reports as disabled never
+not yet started (design; stop/crash/outage TCP observations passed as above,
+boot-window packet capture NOT TESTED). Filters that WFP reports as disabled never
 count as protection (they are deleted and re-added in the same transaction). The
 persistent policy (existing plus proposed) is bounded at 256 executables, 32 per
 profile; beyond that new executables are not added and coverage is reported as
@@ -323,7 +369,8 @@ configuration. The tunnel is rebuilt (name re-resolved) after VPN_DISCONNECTED o
 of the host IPv6 capability (preferred usable global address and ::/0 on the IPv4
 default interface selected by the pinned sing-tun monitor using route + interface metric),
 at most once per 2 minutes, with the persistent policy blocking
-Discord in the gap (NOT TESTED on a real network).
+Discord in the gap (rebuild on native IPv6 change NOT TESTED live; physical-outage
+TCP observations passed, while the post-run-3 network-change probe remains untested live).
 v0.1.0-beta binaries (exe and MSI) are **NOT Authenticode-signed**. Windows
 SmartScreen and antivirus products may warn. Verify each file's SHA-256 against
 `SHA256SUMS.txt` from the same release and verify the GitHub build provenance

@@ -7,8 +7,9 @@ Nothing below is marked PASS on the basis of compilation alone.
 
 ## 1. Executive summary
 
-- AURA Split TR builds, passes all non-privileged tests, and has **no known
-  vulnerabilities in called code** (govulncheck: 27 → 0).
+- Recorded pre-live checks passed builds and non-privileged tests;
+  govulncheck reported 27 → 0 vulnerabilities in called code. These historical
+  checks were not rerun for this documentation update.
 - A persistent **WFP fail-closed** layer, separate status states and a
   tunnel-only connectivity probe were implemented in this phase.
 - Four audit workstreams (networking, Go security, reliability, release) and
@@ -16,11 +17,12 @@ Nothing below is marked PASS on the basis of compilation alone.
   Codex findings from rounds 1–3 have source-level fixes. The fix for the
   round-3 finding (watcher queue) was made after round 3 and has **not** been
   re-reviewed by Codex.
-- **No privileged or real-network test has been executed.** Installation, the
-  Windows service, the TUN adapter, WFP enforcement and real VPN connectivity
-  are **NOT TESTED**.
-- **GitHub release readiness: BLOCKED** until the authorized real-world test
-  plan passes. The application is **not** production-ready.
+- Live runs 1–3 exercised real providers, WFP, SCM, TUN and MSI on **one Windows
+  11 x64 PC, IPv4-only Ethernet, Kaspersky Plus active, unsigned beta**.
+  TCP socket observations passed the scenarios in §7/§9; they are not packet captures.
+- **GitHub release readiness: validation incomplete; not production-ready.**
+  Packet-capture and broader-environment checks remain open. Public release is
+  the maintainer's decision. [Live record](../testing/phase3_live_results_2026-11-22.md).
 
 ## 2. Actual architecture
 
@@ -51,7 +53,7 @@ Details: [`docs/audits/phase3_architecture.md`](../audits/phase3_architecture.md
 |---|---|---|---|---|---|
 | Agent B — Go security ([phase3_security.md](../audits/phase3_security.md)) | 0 | 0 | 1 (deps) | 7 + 4 info | Deps fixed; S-2…S-8, S-11 fixed; S-9, S-10, S-12 open (Low/Info) |
 | Agent C — reliability ([phase3_reliability.md](../audits/phase3_reliability.md)) | 0 | 0 | 1 (C-1) | 2 | C-1, C-2 fixed |
-| Agent A — networking ([phase3_architecture.md](../audits/phase3_architecture.md)) | — | fail-open windows | — | — | Addressed by WFP layer (pending live test) |
+| Agent A — networking ([phase3_architecture.md](../audits/phase3_architecture.md)) | — | fail-open windows | — | — | WFP exercised live at TCP socket level (§9); packet capture pending |
 | Codex round 1 ([round1](../audits/phase3_codex_review_round1.md)) | 0 | 4 | 4 | — | All fixed in source; #4 partial (architectural) |
 | Codex round 2 ([round2](../audits/phase3_codex_review_round2.md)) | 0 | 1 | 3 | 1 | All fixed in source |
 | Codex round 3 ([round3](../audits/phase3_codex_review_round3.md)) | 0 | 0 | 1 | — | Fixed after the review; **not re-reviewed** |
@@ -75,15 +77,17 @@ Open / accepted items:
   wireguard-windows, MIT), `runtime.Pinner` marshalling, persistent/dynamic
   policy, discovery, watcher, budgets, incomplete-status reporting.
 - New CLI commands `disable` and `recover`; `stop` keeps Discord blocked;
-  `uninstall` removes the policy before the exe; `run --debug` applies the same
-  policy and permit.
+  MSI uninstall runs `recover --msi` before removing the service/exe, while the
+  interactive `uninstall` command explains MSI removal; `run --debug` applies
+  the same policy and permit.
 - Status states: SERVICE_RUNNING, TUNNEL_INITIALIZED,
   VPN_CONNECTIVITY_VERIFIED, VPN_DEGRADED, VPN_DISCONNECTED, PROTECTION_ACTIVE.
   Probe: HTTPS to `www.cloudflare.com/cdn-cgi/trace` dialled only through
   `wg`, DNS resolved through the tunnel; IP never stored or logged.
 - Service: BFE dependency, ordered/bounded shutdown, close-timeout is fatal
   (fresh process via SCM recovery), `Disable` before stop in disable/recover.
-- Setup: policy applied before start, exe backup + rollback.
+- MSI owns installation and service registration; setup configures the profile and
+  applies policy before start. Forced-failure MSI rollback remains NOT TESTED live.
 - Filesystem hardening fixes S-2…S-5; event-log and sing-box log redaction.
 - Toolchain go1.26.11; x/net, x/crypto, grpc, compress, brotli bumped.
 - WinDivert driver no longer embedded (`with_external_windivert`).
@@ -92,6 +96,9 @@ Open / accepted items:
 - Release/compliance files and CI (see §10, §13).
 
 ## 5. Tests executed
+
+Historical checks from the phase record; no builds or tests were run for this
+documentation-only update. Live results are separately recorded in §7/§9.
 
 | Check | Result | Notes |
 |---|---|---|
@@ -111,21 +118,39 @@ Open / accepted items:
 | `go test -race ./...` | BLOCKED | Requires cgo; no gcc on this machine |
 | `go test -tags acltests ./internal/paths` (elevated cases) | BLOCKED | Needs an elevated shell; 1 test fails unelevated with an ownership-assignment error |
 | `go test ./internal/wfp` from go-build temp dir | BLOCKED (env) | OS refuses to launch the test binary (likely Kaspersky heuristic; earlier it flagged `paths.test.exe` as `VHO:Trojan.Win64.Convagent.gen`). Same tests PASS from another directory |
-| Real WFP calls, SCM lifecycle, TUN, recovery actions | NOT TESTED | Require admin + explicit user authorization |
+| Real WFP calls, SCM lifecycle, TUN | PASS (live scope) | Runs 1–3, §7/§9; forced-failure recovery/rollback paths remain NOT TESTED |
 | GitHub Actions workflows | NOT TESTED | Not run on GitHub (YAML parses locally) |
 
 ## 7. Real VPN validation status
 
-| Item | Status |
-|---|---|
-| Proton VPN WireGuard | NOT TESTED |
-| Cloudflare WARP | NOT TESTED |
-| Generic WireGuard | NOT TESTED |
-| VPN_CONNECTIVITY_VERIFIED probe against a real endpoint | NOT TESTED (unit-tested against fakes only) |
-| Discord Stable / PTB / Canary, voice, screen share, update | NOT TESTED |
+All live results below are limited to **one Windows 11 x64 PC, IPv4-only
+Ethernet, Kaspersky Plus active, unsigned beta**. Source and chronology:
+[live runs 1–3](../testing/phase3_live_results_2026-11-22.md).
 
-Plan: [`docs/testing/phase3_realworld_test_plan.md`](../testing/phase3_realworld_test_plan.md)
-(15 scenarios, baseline capture, recovery, leak tests; all rows NOT TESTED).
+| Item | Status | Observation / limit |
+|---|---|---|
+| Proton VPN, Cloudflare WARP, generic WireGuard | PASS | `Get-NetTCPConnection` sampling: established Discord TCP sockets had TUN local address `172.19.0.1`; generic option used a Proton `.conf`, not an additional provider |
+| VPN_CONNECTIVITY_VERIFIED against real endpoints | PASS | Status/probe logs reported verified connectivity after connection/retry |
+| Discord Stable + voice | PASS | TCP method above; successful voice join user-observed, UDP path inferred, not packet-captured |
+| PTB / Canary, screen share, Discord update | NOT TESTED | Not established by runs 1–3 |
+| Windows restart, service enabled | PASS | Service/tunnel up ~12 s after boot; Discord TCP via TUN after user opened it; boot-window leak capture NOT TESTED |
+| `disable` then `start` | PASS | Disabled + filters removed + direct TCP; start restored automatic service and TUN TCP |
+| MSI install / upgrade / uninstall | PASS | MSI logs/lifecycle checks; after uninstall `netsh wfp show filters/state`: 0 AURA provider filters/sublayer; IPs, DNS servers and routes identical to pre-install capture; `%ProgramData%\AuraSplitTR` (private key) removed |
+| Invalid configuration | PASS | Rejected without changing running profile, WFP policy or Discord TUN routing |
+| Forced-failure MSI uninstall/upgrade rollback; repair/error paths | NOT TESTED | Successful uninstall did not exercise rollback |
+| Packet-capture leaks: DNS/IPv6/UDP, boot window, browser/ECH | NOT TESTED | TCP socket sampling is not packet capture |
+| CPU measurement; native IPv6 hosts; other AV products; multiple machines | NOT TESTED | No broader validation claimed |
+| Post-run-3 file picker, VPN_CONNECTING start-up grace, network-change probe | NOT TESTED | Implemented after the tested build; run 3 status missed the ~40 s outage |
+
+Live-test bugs fixed:
+
+- IPv6-less host WireGuard bind: corrected connection path, re-verified live.
+- Browser IPv6 outage: host-aware TUN/DNS configuration, re-verified live.
+- WARP host-name endpoint: IP resolution before configuration, re-verified live.
+- AV hold on self-install: switched to MSI; no AV alert/start-up hold observed in MSI runs on the same Kaspersky PC.
+
+Remaining procedure: [real-world test plan](../testing/phase3_realworld_test_plan.md).
+Its original checklist is not the latest execution record.
 
 ## 8. DNS and IPv6 leakage assessment (design-level, not measured)
 
@@ -138,22 +163,31 @@ Plan: [`docs/testing/phase3_realworld_test_plan.md`](../testing/phase3_realworld
 - Browser Discord: routed by sniffed domain only; not covered by WFP. ECH,
   shared CDN IPs with `reverse_mapping`, browser DoH can misroute; precise
   browser isolation is **not guaranteed** (see architecture audit §5).
-- Status: **NOT TESTED** in a real network.
+- Packet-capture validation: **NOT TESTED**. Live TCP socket results (§7/§9)
+  do not establish DNS, IPv6 or UDP leak protection.
 
 ## 9. Fail-closed verification
 
-| Scenario | Implemented | Verified |
-|---|---|---|
-| Boot before service start | Yes (persistent filters load with BFE) | NOT TESTED |
-| Service crash / kill | Yes (persistent filters remain) | NOT TESTED |
-| VPN peer unreachable, TUN up | Yes (traffic goes to `wg`, dropped) | NOT TESTED |
-| TUN creation fails | Yes (no TUN permit → blocked) | NOT TESTED |
-| New Discord version | Partial (watcher ~1 s + 60 s rescan) | NOT TESTED |
-| `disable` / `recover` / `uninstall` rollback | Yes | NOT TESTED |
-| WFP arbitration vs sing-tun hard/soft permits | Reasoned from source by Codex r1 | NOT TESTED |
+PASS below means **TCP socket-level observation only** on the single PC in §7.
+Per-second `Get-NetTCPConnection` sampling found **0 Discord TCP sockets outside
+the TUN** in the stop/crash/outage scenarios. UDP and DNS were not captured;
+these results are **not packet-capture leak tests**.
 
-Per the Phase 3 rule "if reliable fail-closed cannot be shown, block public
-release": fail-closed is **implemented but unverified**, so release stays BLOCKED.
+| Scenario | Status | Observation / limit |
+|---|---|---|
+| Service `stop` | PASS | 25 s stopped; no off-TUN Discord TCP sockets |
+| Forced crash (`taskkill /F`) | PASS | ~4–5 s until SCM restart; no off-TUN Discord TCP sockets; reconnected via TUN |
+| Physical network loss / recovery | PASS | Ethernet unplugged ~40 s; no off-TUN Discord TCP sockets; TUN traffic resumed after replug; status missed the short outage |
+| Boot before service start | NOT TESTED | Service/tunnel up ~12 s after boot was observed, but no boot-window leak capture |
+| VPN peer unreachable with physical network still up | NOT TESTED | Separate scenario from unplugging Ethernet |
+| TUN creation failure | NOT TESTED | Not forced live |
+| New Discord version / discovery race | NOT TESTED | Inventory limitation remains |
+| Forced-failure uninstall/upgrade rollback | NOT TESTED | MSI success paths passed; rollback paths were not forced |
+| WFP arbitration vs other hard/soft permits | NOT TESTED | No general interoperability proof from one Kaspersky PC |
+| DNS/IPv6/UDP and browser/ECH packet-capture leak tests | NOT TESTED | No packet captures |
+
+Persistent WFP enforcement was exercised live with the limited observations above.
+Production readiness is not established; public release remains the maintainer's decision.
 
 ## 10. Dependency license assessment
 
@@ -173,19 +207,23 @@ release": fail-closed is **implemented but unverified**, so release stays BLOCKE
 
 ## 11. Performance measurements
 
-**NOT TESTED.** No numbers exist. Procedure and empty tables:
-real-world test plan §5. No targets were invented.
+Live run 1 (voice active): working set ≈63–64 MB, private memory ≈80 MB,
+600 handles, 24 threads. **CPU: NOT TESTED / not measured** (SYSTEM process CPU
+time was not readable unelevated). These are single-machine observations, not a
+performance benchmark; see the [live record](../testing/phase3_live_results_2026-11-22.md).
 
 ## 12. Remaining risks
 
-1. All privileged/network behaviour unverified (largest risk).
+1. Packet-capture leak checks and broader environments untested; live evidence
+   is limited to TCP socket sampling on one IPv4-only Windows 11 PC.
 2. Inventory-based fail-closed race for new Discord versions; DNS name leak via
    Windows DNS Client while stopped.
 3. If the exe is deleted without `uninstall`, Discord stays blocked until
    `aurasplit recover` is run from a re-downloaded copy.
 4. Browser Discord isolation not guaranteed.
-5. Unsigned binary → AV heuristics (observed with Kaspersky on test binaries)
-   and weaker UAC provenance.
+5. Unsigned binary → AV heuristics (observed with Kaspersky on test binaries
+   and self-install) and weaker UAC provenance; MSI runs on the same PC had
+   no observed AV alert/start-up hold.
 6. Wintun license ambiguity.
 7. Last watcher fix not re-reviewed by Codex.
 
@@ -193,26 +231,24 @@ real-world test plan §5. No targets were invented.
 
 | Item | Status |
 |---|---|
-| Repository clean of personal paths / credentials / configs / binaries | PASS (`dist/` and `*.exe` git-ignored; no commits yet) |
+| Repository scan for personal paths / credentials / configs / binaries | Historical scan PASS (`dist/` and `*.exe` git-ignored); not a current clean-worktree claim |
 | LICENSE, NOTICE, THIRD_PARTY_LICENSES, README, CONTRIBUTING, SECURITY, TRADEMARKS, .gitignore | Prepared; repository: https://github.com/umut720s/aura-split-tr; project copyright is 2026 AURA Split TR contributors; private vulnerability reporting: see SECURITY.md |
 | Build instructions / checksums | Prepared (`docs/BUILD.md`, `build.ps1`, `SHA256SUMS.txt`) |
 | Release notes / known limitations | Prepared (`docs/RELEASE_NOTES_v0.1.0-beta.md`) |
 | CI (build, test, vet, staticcheck, govulncheck, gofmt) | Prepared, NOT TESTED on GitHub |
 | Release workflow (manual, draft-only, provenance, checksums) | Prepared, NOT TESTED; no auto-publish |
 | Authenticode signing | NOT APPLICABLE / not configured |
-| Real-network validation | BLOCKED |
-| **Overall** | **BLOCKED** |
+| Real-network validation | PASS for §7/§9 live observations only; packet capture and broader coverage NOT TESTED |
+| **Overall** | **Not production-ready; validation incomplete. Public release is the maintainer's decision** |
 
-Nothing was pushed, published or released.
+This report does not authorize or establish a public release.
 
 ## 14. Recommended next phase
 
-1. With explicit authorization, run the real-world test plan in a Hyper-V
-   Windows 11 VM with a checkpoint (install → Proton/WARP/generic → Discord
-   voice/update → kill/restart/reboot → disable/recover/uninstall), capturing
-   `netsh wfp show filters` and physical-NIC packet captures.
-2. Run elevated `acltests` and a `-race` build on a machine with mingw-w64.
-3. Ask Codex to re-review the final watcher fix (and any fixes from step 1).
-4. Fill placeholders, settle the Wintun license question, decide on code signing.
-5. Only then create a private GitHub repo, let CI run, and produce a **draft**
-   `v0.1.0-beta` for review before any public release.
+1. Complete packet-capture leak tests (DNS/IPv6/UDP, boot window, browser/ECH)
+   and forced-failure MSI uninstall/upgrade rollback paths.
+2. Live-test the post-run-3 file picker, VPN_CONNECTING start-up grace and
+   network-change probe; measure CPU and expand to native IPv6, other AVs and machines.
+3. Complete remaining elevated/race checks and independent review of later fixes.
+4. Settle remaining license/signing questions and validate release artifacts.
+   Public release is the maintainer's decision; the beta is not production-ready.

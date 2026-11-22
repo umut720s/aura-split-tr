@@ -3,16 +3,40 @@
 > **Draft.** Not published. Fill in the TODO markers and re-check every
 > statement against the tagged source before publishing.
 
-First public beta. **Platform: Windows 11 x64 only** (tested target; Windows 10
+Planned first public beta. **Platform: Windows 11 x64 only** (tested target; Windows 10
 may work but is not supported in this beta).
 
-## Status legend
+## Canlı test özeti / Live validation
 
-- **Implemented, not yet validated in real networks** — code exists and has
-  unit tests where noted; it has not been verified end-to-end against real
-  VPN providers, ISPs or Discord clients.
+Canlı testler **tek Windows 11 x64 PC'de, IPv4-only Ethernet, Kaspersky Plus
+açık ve imzasız beta** ile yapıldı. TCP soket gözlemi paket yakalama değildir;
+UDP/DNS ve açılış penceresi doğrulanmadı. Run 3 sonrası dosya seçici,
+`VPN_CONNECTING` başlangıç toleransı ve ağ-değişimi probe düzeltmesi uygulandı,
+**henüz canlı test edilmedi**. Beta üretime hazır değildir; herkese açık sürüm
+kararı bakımcıya aittir.
 
-## Features (implemented, not yet validated in real networks)
+All live tests used **one Windows 11 x64 PC, IPv4-only Ethernet, Kaspersky Plus
+active, unsigned beta**. Details and chronology:
+[live runs 1–3](testing/phase3_live_results_2026-11-22.md).
+**Not production-ready**; public release is the maintainer's decision.
+
+| Category | Result / observation method |
+|---|---|
+| **Observed — Discord** | Proton, WARP and generic WireGuard (a Proton `.conf` used for the generic option): established Discord TCP sockets sampled with `Get-NetTCPConnection` had TUN local address `172.19.0.1`. Voice join succeeded (user-observed); UDP path inferred, not packet-captured. |
+| **Observed — fail-closed** | Per-second socket sampling during `stop` (25 s), `taskkill` crash (~4–5 s until SCM restart) and ~40 s physical network outage: 0 Discord TCP sockets outside the TUN. Socket-level observation, not packet capture; UDP and DNS not captured. |
+| **Observed — reboot** | Service enabled: service/tunnel up ~12 s after boot; Discord TCP via TUN after user opened it. No boot-window leak capture. |
+| **Observed — lifecycle/config** | `disable`/`start`, MSI install/upgrade/uninstall passed. After uninstall: 0 AURA provider filters/sublayer in `netsh wfp show filters/state`; IP addresses, DNS servers and routes identical to pre-install capture; `%ProgramData%\AuraSplitTR` (private key) removed. Invalid config rejected without changing the running profile, WFP policy or Discord TUN routing. |
+| **Not yet tested** | Packet-capture leaks (DNS/IPv6/UDP, boot window, browser/ECH); forced-failure MSI uninstall/upgrade rollback; repair/error paths; CPU measurement; native IPv6 hosts; other AV products; more than one machine. |
+| **Implemented, not live-tested** | Post-run-3 file picker, `VPN_CONNECTING` start-up grace and network-change probe. Run 3 status missed the ~40 s outage. |
+
+Live-test bugs fixed:
+
+- IPv6-less host WireGuard bind: connection path corrected and re-verified live.
+- Browser IPv6 outage: host-aware TUN/DNS configuration corrected and re-verified live.
+- WARP host-name endpoint handshake: IP resolution corrected and re-verified live.
+- AV hold on self-install: moved to MSI; no AV alert/start-up hold observed in MSI runs on the same PC.
+
+## Features (implemented; live validation limited to the scope above)
 
 - Routes only Discord traffic through a WireGuard tunnel (embedded sing-box
   v1.14.4, gVisor TUN stack):
@@ -31,8 +55,8 @@ may work but is not supported in this beta).
   policy first (`recover --msi`), then the service, the files and
   `%ProgramData%\AuraSplitTR` (profile with the private key). Upgrades keep the
   profile; downgrades are refused. `aurasplit.exe` no longer copies itself or
-  creates a service. **MSI install/uninstall/upgrade/repair: NOT TESTED on a
-  real machine yet** (built and ICE-validated only).
+  creates a service. **MSI install/upgrade/uninstall passed live** in the scope
+  above; repair and forced-failure rollback paths remain **NOT TESTED** live.
 - Runs as a Windows service (`AuraSplitTR`), starts automatically at boot once
   configured, no window or tray icon.
 - Turkish configuration wizard (`setup`, Start Menu shortcut; runs only from
@@ -53,9 +77,9 @@ may work but is not supported in this beta).
 
 ## Known limitations
 
-- **Fail-closed is limited and NOT verified in a real network.** Persistent
-  Windows Filtering Platform filters (implemented; unit-tested with a fake
-  backend only, real WFP calls NOT TESTED) block the **discovered** Discord
+- **Fail-closed is limited; live evidence is TCP socket sampling only.** Persistent
+  Windows Filtering Platform filters (exercised on a real machine as above)
+  block the **discovered** Discord
   desktop executables (`%LOCALAPPDATA%\Discord*\Update.exe` and every
   installed `app-*\Discord*.exe`, all user profiles) outside the tunnel, also
   at boot before the service starts, while it is stopped or crashed, and while
@@ -79,8 +103,9 @@ may work but is not supported in this beta).
     new); beyond that new executables are not added and `status` reports
     incomplete coverage; filters that WFP reports as disabled are not counted
     as protection.
-  None of this has been verified end-to-end on a real machine or network
-  yet. See SECURITY.md.
+  Stop/crash/physical-outage TCP observations passed; the remaining windows
+  above, UDP/DNS/IPv6 and boot-window packet-capture checks are not validated.
+  See [SECURITY.md](../SECURITY.md).
 - DNS protection covers the listed Discord domains only.
 - "Tunnel started" means the configuration was applied; the WireGuard
   handshake is not verified.
@@ -93,11 +118,11 @@ may work but is not supported in this beta).
   Authenticode signing is planned for a later release.
 - **Antivirus false positives are possible.** The binary is an unsigned Go
   executable that runs as a service, adds persistent WFP filters, creates a TUN
-  adapter (embedded Wintun DLL loaded from memory) and embeds a WinDivert
-  driver from sing-box. In a live test on a Kaspersky-protected PC the former
+  adapter (embedded Wintun DLL loaded from memory). In a live test on a Kaspersky-protected PC the former
   self-installing setup was flagged by a behaviour detection and the new
-  service process was held in START_PENDING; the switch to an MSI install (and
-  later signing) is the mitigation, not yet re-tested. Report false positives
+  service process was held in START_PENDING; MSI installation was subsequently
+  re-tested on that PC with no observed AV alert/start-up hold. Other AV products
+  remain untested; signing is still planned. Report false positives
   to the AV vendor; never disable your AV or add exclusions.
 - The embedded upstream Wintun DLL contains its author's PDB build path.
 - Not a privacy/anonymity tool: only Discord traffic is tunnelled; the VPN
