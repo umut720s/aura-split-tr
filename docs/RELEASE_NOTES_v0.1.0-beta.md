@@ -1,9 +1,6 @@
-# AURA Split TR v0.1.0-beta — release notes (DRAFT)
+# AURA Split TR v0.1.0-beta — sürüm notları / release notes
 
-> **Draft.** Not published. Fill in the TODO markers and re-check every
-> statement against the tagged source before publishing.
-
-Planned first public beta. **Platform: Windows 11 x64 only** (tested target; Windows 10
+First public beta (pre-release). **Platform: Windows 11 x64 only** (tested target; Windows 10
 may work but is not supported in this beta).
 
 ## Canlı test özeti / Live validation
@@ -12,13 +9,12 @@ Canlı testler **tek Windows 11 x64 PC'de, IPv4-only Ethernet, Kaspersky Plus
 açık ve imzasız beta** ile yapıldı. TCP soket gözlemi paket yakalama değildir;
 UDP/DNS ve açılış penceresi doğrulanmadı. Run 3 sonrası dosya seçici,
 `VPN_CONNECTING` başlangıç toleransı ve ağ-değişimi probe düzeltmesi uygulandı,
-**henüz canlı test edilmedi**. Beta üretime hazır değildir; herkese açık sürüm
-kararı bakımcıya aittir.
+**henüz canlı test edilmedi**. Yayımlanan beta bir ön sürümdür; üretime hazır değildir.
 
 All live tests used **one Windows 11 x64 PC, IPv4-only Ethernet, Kaspersky Plus
 active, unsigned beta**. Details and chronology:
 [live runs 1–3](testing/phase3_live_results_2026-11-22.md).
-**Not production-ready**; public release is the maintainer's decision.
+**Published as a pre-release; not production-ready.**
 
 | Category | Result / observation method |
 |---|---|
@@ -151,7 +147,7 @@ For each downloaded file, compare its SHA-256 with the matching entry in
 `SHA256SUMS.txt` and run `gh attestation verify <file> -R umut720s/aura-split-tr`
 (replace `<file>` with its path). Do not run a file if either verification fails.
 
-TODO(maintainer): paste the SHA-256 values from the workflow run here.
+The published release includes `SHA256SUMS.txt` with the workflow-generated hashes.
 
 Reproduce the build: see docs/BUILD.md (same Go toolchain as `go.mod`). The
 exe is byte-reproducible; the MSI is not (new GUIDs/timestamps per build) —

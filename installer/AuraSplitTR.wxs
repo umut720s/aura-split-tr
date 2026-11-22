@@ -84,7 +84,9 @@
                   AllowSameVersionUpgrades="yes"
                   DowngradeErrorMessage="Daha yeni bir AURA Split TR sürümü zaten kurulu. Bu eski sürüm kurulamaz; önce yeni sürümü Ayarlar &gt; Uygulamalar bölümünden kaldırın." />
 
-    <MediaTemplate EmbedCab="yes" />
+    <!-- Pin CAB compression for local and CI builds. This applies to File
+         payloads; the commit-time AuraCleanupExe Binary stream stays separate. -->
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
     <!-- 64-bit Windows only. Elevation is handled by Windows Installer (per-machine package). -->
     <Launch Condition="VersionNT64" Message="AURA Split TR yalnızca 64 bit Windows 10/11 üzerinde çalışır." />
