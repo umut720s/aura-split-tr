@@ -3,7 +3,8 @@
 # Manual release build. Runs ONLY when a maintainer starts it from the
 # Actions tab (workflow_dispatch). It:
 #   1. checks out an existing tag,
-#   2. builds aurasplit.exe reproducibly (build.ps1 -Strict -NoMsi),
+#   2. builds aurasplit.exe and embedded-only auraclean.exe reproducibly
+#      (build.ps1 -Strict -NoMsi),
 #   3. Authenticode-signs the exe IF signing is configured (else skipped),
 #   4. builds the Windows Installer package AuraSplitTR-<version>-x64.msi
 #      with the pinned WiX 5.0.2 (build.ps1 -Strict -MsiOnly) around that
@@ -155,6 +156,7 @@ jobs:
           }
 
       - name: Package
+        # auraclean.exe stays inside the MSI; do not copy it to the release output.
         run: |
           $v = "${{ steps.ver.outputs.version }}"
           $msi = "dist/AuraSplitTR-$v-x64.msi"

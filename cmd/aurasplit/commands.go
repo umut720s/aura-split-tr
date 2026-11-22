@@ -8,13 +8,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
 	"aurasplit/internal/engine"
 	"aurasplit/internal/logfile"
+	"aurasplit/internal/msiclean"
 	"aurasplit/internal/paths"
 	"aurasplit/internal/profile"
 	"aurasplit/internal/service"
@@ -375,37 +374,9 @@ type recoverOps struct {
 }
 
 func runRecover(msi bool, ops recoverOps) int {
-	fmt.Println("Kurtarma: AURA Split TR'nin Discord engelleme kuralları (WFP) kaldırılıyor ve hizmet durduruluyor.")
-	code := 0
-	// Disabled first so no queued recovery restart can re-apply the policy.
-	if err := ops.disable(); err != nil && !isNotInstalled(err) {
-		fmt.Println("Uyarı: hizmet devre dışı bırakılamadı (bir kurtarma yeniden başlatması kuralları yeniden uygulayabilir):", err)
-	}
-	switch err := ops.stop(); {
-	case stopOK(err) || isNotInstalled(err):
-	case msi:
-		fmt.Println("HATA: hizmet durdurulamadı; çalışan hizmet kuralları yeniden uygulayabilir:", err)
-		code = 1
-	default:
-		fmt.Println("Uyarı: hizmet durdurulamadı:", err)
-	}
-	if err := ops.remove(); err != nil {
-		fail("WFP kuralları kaldırılamadı.", err)
-		code = 1
-	} else {
-		fmt.Println("- Kurallar kaldırıldı (yoksa zaten temizdi). Discord doğrudan bağlantıyı kullanır.")
-	}
-	if installed, n, err := ops.installed(); err == nil && installed {
-		fmt.Println("UYARI: politika hâlâ yüklü görünüyor (", n, "program ). Bilgisayarı yeniden başlatıp tekrar deneyin.")
-		code = 1
-	}
-	if code == 0 && !msi {
-		fmt.Println("Yeniden etkinleştirmek için: aurasplit.exe start (ya da Başlat menüsünden: AURA Split TR - Yapılandır)")
-	}
-	if code != 0 && msi {
-		fmt.Println("Kaldırma iptal ediliyor (geri alınıyor); aurasplit.exe yerinde kalır. Bilgisayarı yeniden başlatıp kaldırmayı tekrar deneyin ya da yönetici olarak çalıştırın: aurasplit.exe recover")
-	}
-	return code
+	return msiclean.Recover(msi, msiclean.RecoverOps{
+		Disable: ops.disable, Stop: ops.stop, Remove: ops.remove, Installed: ops.installed,
+	})
 }
 
 // cmdUninstall no longer removes anything by itself when a user runs it:
@@ -443,65 +414,14 @@ Yalnızca Discord'u hemen doğrudan bağlantıya döndürmek için:
 // forwarded to the MSI log). It never touches the program directory, which Windows
 // Installer owns.
 func cmdUninstallMSI() int {
-	if code := cmdRecover(true); code != 0 {
-		fmt.Println("Veri klasörüne dokunulmadı.")
-		return code
-	}
-	res, err := paths.CleanDataDir(paths.DataDir())
-	if err != nil {
-		res.Kept = append(res.Kept, err.Error())
-	}
-	for _, l := range describeCleanup(paths.DataDir(), res) {
-		fmt.Println(l)
-	}
-	if ours, foreign := quarantineDirs(); len(ours)+len(foreign) > 0 {
-		fmt.Println("Not: karantina klasörleri silinmedi (elle inceleyin):")
-		for _, d := range append(ours, foreign...) {
-			fmt.Println("  ", d)
-		}
-	}
-	return 0
+	return msiclean.Uninstall(func() int { return cmdRecover(true) })
 }
 
-// describeCleanup turns a data-directory cleanup result into the lines
-// printed by the cleanup command. Pure (unit-tested).
 func describeCleanup(dir string, res paths.CleanResult) []string {
-	switch {
-	case res.Missing:
-		return []string{"- Veri klasörü yok (temiz): " + dir}
-	case res.Removed:
-		return []string{fmt.Sprintf("- Veri klasörü silindi (%d AURA Split TR dosyası): %s", len(res.Deleted), dir)}
-	}
-	out := []string{"UYARI: veri klasörü elle incelenmek üzere bırakıldı: " + dir}
-	if len(res.Deleted) > 0 {
-		out = append(out, fmt.Sprintf("  Silinen AURA Split TR dosyaları: %s", strings.Join(res.Deleted, ", ")))
-	}
-	for _, k := range res.Kept {
-		out = append(out, "  Neden: "+k)
-	}
-	out = append(out, "  İçinde VPN özel anahtarı (profile.json) olabilir; içeriği kontrol edip klasörü yönetici olarak elle silin.")
-	return out
+	return msiclean.DescribeCleanup(dir, res)
 }
 
-// quarantineDirs lists the quarantine directories next to our directories.
-// Anyone can create such names in %ProgramData%, so only real directories
-// owned and controlled by SYSTEM/Administrators are reported as ours.
-func quarantineDirs() (ours, foreign []string) {
-	for _, dir := range []string{paths.DataDir(), paths.InstallDir()} {
-		m, err := filepath.Glob(dir + paths.QuarantineInfix + "*")
-		if err != nil {
-			continue
-		}
-		for _, q := range m {
-			if ok, err := paths.IsTrustedAppDir(q); err == nil && ok {
-				ours = append(ours, q)
-			} else {
-				foreign = append(foreign, q)
-			}
-		}
-	}
-	return ours, foreign
-}
+func quarantineDirs() (ours, foreign []string) { return msiclean.QuarantineDirs() }
 
 func consoleLog(level, msg string) {
 	fmt.Fprintf(os.Stderr, "%s %s [aurasplit] %s\n", time.Now().Format("2006-01-02 15:04:05"), level, logfile.ScrubString(msg))

@@ -46,6 +46,19 @@ Output: `dist\aurasplit.exe`, `dist\AuraSplitTR-<version>-x64.msi` and
 (package the existing `dist\aurasplit.exe`; when signing is configured for a later
 release, the release workflow signs the exe between the two steps).
 
+`build.ps1`, `dist\auraclean.exe` yardımcısını da aynı hedef ve tekrarlanabilir
+derleme bayraklarıyla, özel build tag olmadan üretir. `-NoMsi` iki exe'yi derler;
+`-MsiOnly` ikisinin de mevcut olmasını gerektirir. `auraclean.exe`, yalnızca MSI'nin
+`AuraCleanupExe` Binary akışında bulunur; kurulum klasörüne, yayın zip'ine,
+bağımsız yayın dosyalarına veya `SHA256SUMS.txt` listesine eklenmez. MSI'nin
+sağlama toplamı ve provenance kaydı gömülü yardımcıyı da kapsar. CI ve release
+iş akışları iki exe için de `build.ps1` kullanır; yayın dosya listeleri değişmez.
+Yardımcı, `uninstall --msi` ile yönetici/SYSTEM bağlamında ortak
+`internal/msiclean` yolunu çalıştırır: hizmeti devre dışı bırakıp durdurur,
+`internal/wfp` ile politikayı kaldırır ve başarıdan sonra `paths.CleanDataDir`
+güvenlik denetimleriyle temizler. Engine/sing-box bağımlılığı yoktur;
+`go list -deps ./cmd/auraclean` ile doğrulanabilir.
+
 ### MSI
 
 `installer/AuraSplitTR.wxs` is built with
@@ -72,7 +85,8 @@ wix msi validate -sice ICE43 -sice ICE57 dist\AuraSplitTR-<version>-x64.msi
   Compare the `aurasplit.exe` inside it with an independent build, e.g. after
   an administrative extraction `msiexec /a <msi> /qn TARGETDIR=<empty folder>`
   (only unpacks the files; registers nothing).
-- Intermediate files (`.wixpdb`, cabinet) go to `obj\installer\`, not `dist\`.
+- Ara dosyalar (`.wixpdb`, cabinet), `GOTMPDIR` veya sistem geçici klasörü
+  altındaki `aurasplit-installer` klasörüne yazılır.
 
 What `build.ps1` fixes so the output does not depend on the build machine:
 

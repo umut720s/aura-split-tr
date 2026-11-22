@@ -30,7 +30,7 @@
 
   Preprocessor variables:
     Version  MSI product version, major.minor.build (required)
-    BinDir   folder that contains aurasplit.exe (default: ..\dist)
+    BinDir   folder that contains aurasplit.exe and auraclean.exe (default: ..\dist)
     DocDir   folder that contains LICENSE / NOTICE / THIRD_PARTY_LICENSES.md
              (default: ..)
 -->
@@ -285,8 +285,9 @@
       util:RemoveFolderEx, which deleted the tree by path name.
     -->
     <!-- Keep the profile and rollback record until commit. The installed
-         executable is already removed then, so execute the packaged copy. -->
-    <Binary Id="AuraCleanupExe" SourceFile="$(BinDir)\aurasplit.exe" />
+         executable is already removed then, so execute the small packaged
+         auraclean helper (shared recovery/cleanup code, no tunnel engine). -->
+    <Binary Id="AuraCleanupExe" SourceFile="$(BinDir)\auraclean.exe" />
     <CustomAction Id="AuraCleanData" BinaryRef="AuraCleanupExe"
                   ExeCommand="uninstall --msi" Execute="commit"
                   Impersonate="no" Return="ignore" />

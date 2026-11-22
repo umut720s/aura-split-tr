@@ -8,8 +8,8 @@
 #
 # Usage:  powershell -ExecutionPolicy Bypass -File .\build.ps1 [-Version 1.0.0] [-Strict] [-NoMsi | -MsiOnly]
 #
-#   -NoMsi    build only aurasplit.exe
-#   -MsiOnly  skip the Go build and package the existing dist\aurasplit.exe
+#   -NoMsi    build aurasplit.exe and the embedded-only auraclean.exe
+#   -MsiOnly  skip Go builds and package both existing dist executables
 #             (the release workflow signs the exe in between, see
 #             .github/workflows/release.yml)
 #
@@ -45,6 +45,7 @@ if ($Version -notmatch '^[0-9A-Za-z.+_-]+$') {
 $dist = Join-Path $PSScriptRoot "dist"
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 $out = Join-Path $dist "aurasplit.exe"
+$cleanupOut = Join-Path $dist "auraclean.exe"
 
 if (-not $MsiOnly) {
     if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
@@ -100,11 +101,21 @@ if (-not $MsiOnly) {
     # -buildid=: empty build ID; -s -w: no symbol/DWARF tables.
     go build -trimpath -buildvcs=false -tags $Tags -ldflags "-s -w -buildid= -X main.version=$Version" -o $out ./cmd/aurasplit
     if ($LASTEXITCODE -ne 0) { throw "go build basarisiz (cikis kodu $LASTEXITCODE)" }
-} elseif (-not (Test-Path -LiteralPath $out)) {
-    throw "-MsiOnly: $out bulunamadi; once exe'yi derleyin."
+
+    # Only the commit-time cleanup path: no engine or sing-box build tags.
+    Write-Host "Temizleme yardimcisi derleniyor: $cleanupOut (surum $Version)"
+    go build -trimpath -buildvcs=false -ldflags "-s -w -buildid= -X main.version=$Version" -o $cleanupOut ./cmd/auraclean
+    if ($LASTEXITCODE -ne 0) { throw "auraclean derlemesi basarisiz (cikis kodu $LASTEXITCODE)" }
+} else {
+    foreach ($exe in @($out, $cleanupOut)) {
+        if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+            throw "-MsiOnly: $exe bulunamadi; once exe'leri derleyin."
+        }
+    }
 }
 
 # Files listed in SHA256SUMS.txt: only what this run produced or packaged.
+# auraclean.exe is embedded only; never a standalone release asset.
 $artifacts = @($out)
 
 if (-not $NoMsi) {
@@ -155,7 +166,9 @@ if (-not $NoMsi) {
 
     $msiName = "AuraSplitTR-$Version-x64.msi"
     $msi = Join-Path $dist $msiName
-    $obj = Join-Path $PSScriptRoot "obj\installer"
+    $tempRoot = [IO.Path]::GetTempPath()
+    if ($env:GOTMPDIR) { $tempRoot = $env:GOTMPDIR }
+    $obj = Join-Path $tempRoot "aurasplit-installer"
     New-Item -ItemType Directory -Force -Path $obj | Out-Null
     $pdb = Join-Path $obj ([IO.Path]::ChangeExtension($msiName, ".wixpdb"))
     # Stale packages from earlier runs are not part of this build.

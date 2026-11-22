@@ -387,7 +387,7 @@ sıfırlanır. "Doğrulandı" asla süreç varlığından çıkarılmaz.
      hatası diğer geri yükleme girişimlerini engellemez; hatalar MSI günlüğündedir.
   3. MSI hizmeti durdurur ve siler (`ServiceControl Stop=both Remove=uninstall Wait=yes`).
   4. `AuraCleanData` (commit, LocalSystem, `Return="ignore"`, ek koşul `AURAEXEFOUND`):
-     MSI'ye gömülü aynı sürüm exe `uninstall --msi` çalıştırır; kurulu exe artık silinmiş
+     MSI'ye gömülü küçük `auraclean.exe`, `uninstall --msi` çalıştırır; kurulu exe artık silinmiş
      olsa da çalışabilir. Önce `recover` tekrar çalışır (hata → veri korunur, loglanır).
      Profil ve kurtarma kaydı commit aşamasına kadar korunur. Sonra
      `paths.CleanDataDir`: klasör bağlantı izlenmeden, `FILE_SHARE_DELETE` olmadan açılır ve
@@ -443,6 +443,7 @@ sıfırlanır. "Doğrulandı" asla süreç varlığından çıkarılmaz.
 | `internal/wfp` | engine ajanı | `Policy` arayüzü: `Apply(paths []string, mode ApplyMode) (ApplyResult, error)` (`AddOnly`/`Authoritative`; `*IncompleteError`/`ErrIncomplete` geçerli sonuçla döner), `PermitOnTunnel(luid uint64, paths []string) (Permit, error)` (`Permit`: `io.Closer` + `Paths()`), `RemoveAll() error`, `Installed() (bool, int, error)`; `New() *Firewall`; `NewGuard(...)` (`Reconcile`, `TunnelUp`, `Run(ctx, interval, kick)`, `Status`); `Discover`, `DiscoverIn`, `ProfileDirs`, `ErrCapReached`, `WatchTargets`, `WatchTargetsIn`, `RunWatcher`, `TunnelLUID`; `ProviderKey`, `SubLayerKey`, `SubLayerWeight` |
 | `internal/service` | engine ajanı | `IsAdmin() bool`; `IsWindowsService() (bool, error)`; `Verify(exePath string) error` (MSI'nin kaydettiği hizmeti doğrular: tırnaklı komut satırı, LocalSystem, kendi süreci, `BFE`; hizmeti CLI **oluşturmaz/silmez**); `EnableNonCrashRecovery() error`; `SetAutoStart(bool) error`; `Disable() error`; `ScrubEventText`; hatalar `ErrNotInstalled`, `ErrNotRunning`, `ErrStartPending`, `ErrFatal` (gözetici durur, hizmet sıfırdan farklı kodla çıkar); `Start() error`; `StartWait(timeout) error`; `Stop() error`; `Status() (string, error)`; `StatusPID() (string, uint32, error)`; `RunService(run func(ctx context.Context) error) error` |
 | `cmd/aurasplit` | CLI ajanı | `setup` (yalnızca kurulu kopyadan; yapılandırma), `status`, `start`, `stop`, `restart`, `disable`, `recover`, `uninstall` (yalnızca MSI ile kaldırmayı anlatır), `recover --msi` / `start --msi` / `uninstall --msi` (Windows Installer bağlamı, etkileşimsiz), `run [--debug]` (ön planda hata ayıklama, konsola günlük), `service` (gizli; SCM çağırır), `version` |
+| `cmd/auraclean` / `internal/msiclean` | paketleme | Küçük, yalnızca MSI içine gömülen temizleme yardımcısı; `uninstall --msi`, yönetici/SYSTEM denetimi. CLI ile ortak kurtarma ve veri temizliği kodu; `internal/paths`, `internal/service` ve WFP kaldırması için `internal/wfp` kullanır; engine/sing-box içermez. Commit öncesi profil ve geri alma kaydı korunur; kurtarma hatasında veri silinmez. |
 | `installer` | paketleme | `AuraSplitTR.wxs` (WiX 5.0.2 + `WixToolset.Util.wixext`; `build.ps1` derler ve ICE ile doğrular) |
 
 ## Güvenlik kuralları (bütün ajanlar)
