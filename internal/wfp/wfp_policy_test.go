@@ -220,7 +220,7 @@ func (b *fakeBFE) count(pred func(Filter) bool) int {
 func persistentOnly(f Filter) bool { return f.Persistent }
 
 func TestSubLayerWeightBelowSingTun(t *testing.T) {
-	if SubLayerWeight >= 0xFFFF {
+	if uint32(SubLayerWeight) >= 0xFFFF {
 		t.Fatalf("sublayer weight %#x must be below sing-tun's 0xFFFF", SubLayerWeight)
 	}
 	if !(WeightLoopbackPermit > WeightTunnelPermit && WeightTunnelPermit > WeightBlock) {

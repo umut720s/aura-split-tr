@@ -565,14 +565,10 @@ type childState struct {
 	modified time.Time
 }
 
-// inspect opens child without following links and with read-only rights.
-// It returns errVanished if child no longer exists, and any other error if
-// it cannot be inspected (sharing violation, access denied).
-func (s *sweeper) inspect(child string) (childState, error) {
-	return s.inspectMask(child, writeMask)
-}
-
-// inspectMask is inspect with the rights untrusted principals must not hold.
+// inspectMask opens child without following links and with read-only
+// rights; mask lists the rights untrusted principals must not hold. It
+// returns errVanished if child no longer exists, and any other error if it
+// cannot be inspected (sharing violation, access denied).
 func (s *sweeper) inspectMask(child string, mask uint32) (childState, error) {
 	var st childState
 	h, err := openNoFollow(child, windows.READ_CONTROL|windows.FILE_READ_ATTRIBUTES)
