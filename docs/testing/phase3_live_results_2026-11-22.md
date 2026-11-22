@@ -159,3 +159,12 @@ Tooling: `tools/leaktest/capture.ps1` (pktmon on the physical "Ethernet" NIC, 25
 | L2b | Service stopped, browser Discord tab closed, Discord app restarted (75 s) | PASS for the app / DNS leak as documented | 0 Discord TLS SNI, 0 HTTP Host; 9 Discord DNS queries (gateway*.discord.gg, discord.com, discordapp.com, cdn.discordapp.com, updates.discord.com) to the DNS server - the Windows DNS Client resolves names even though WFP blocks the connections. |
 
 Conclusions: with the service running, no Discord names were visible on the physical NIC in this capture. With the service stopped, the Discord app could not connect (no TLS), but Discord host names leak in plaintext DNS, and browser Discord tabs connect directly. Not covered: boot-window capture, QUIC SNI, ECH, other machines/AV products.
+
+## Live run 6 (2026-11-22, 22:05-22:10) - commit 3bc143c (small auraclean MSI helper, MSI 14 MB)
+
+| ID | Scenario | Result | Evidence / notes |
+|---|---|---|---|
+| S8b | MSI upgrade over the previous build (14 MB MSI) | PASS | exit 0 in ~6 s; Proton profile kept; service restarted; `VPN_CONNECTIVITY_VERIFIED` 10 s later. |
+| S14 | `msiexec /x` with the new `auraclean.exe` data-cleanup helper | PASS | exit 0; custom actions in order (save state -> recover -> AuraCleanData via auraclean `uninstall --msi`); service, install dir, Start Menu entry, TUN adapter and `%ProgramData%\AuraSplitTR` (private key) removed; 0 AURA WFP provider filters / sublayer. |
+| S1 + S3 | Reinstall + reconfigure Proton via the file picker | PASS | Service running, VPN verified 11 s after start, protection complete. |
+| obs. | Pre-existing Discord connection after enabling protection | Observed limitation | One Discord TCP socket opened at 22:06:09 (while AURA was uninstalled) stayed on the physical NIC after protection was enabled at 22:07:15; new sockets used the TUN. WFP authorizes new connections only. After the user restarted Discord: 6/6 sockets via TUN. Matches the existing instruction to fully restart Discord after setup. Possible improvement: close Discord's off-TUN TCP connections when protection is enabled. |
