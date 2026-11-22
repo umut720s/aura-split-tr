@@ -1,0 +1,221 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Manual release build. Runs ONLY when a maintainer starts it from the
+# Actions tab (workflow_dispatch). It:
+#   1. checks out an existing tag,
+#   2. builds aurasplit.exe reproducibly (build.ps1 -Strict -NoMsi),
+#   3. Authenticode-signs the exe IF signing is configured (else skipped),
+#   4. builds the Windows Installer package AuraSplitTR-<version>-x64.msi
+#      with the pinned WiX 5.0.2 (build.ps1 -Strict -MsiOnly) around that
+#      exe, validates it (ICE), and signs the MSI IF signing is configured,
+#   5. packages a zip + SHA256SUMS.txt (exe, msi, zip),
+#   6. creates signed build provenance (actions/attest-build-provenance)
+#      for the exe, the msi and the zip,
+#   7. uploads them as workflow artifacts,
+#   8. optionally creates a DRAFT GitHub release.
+#
+# Nothing is ever published automatically: the release stays a draft until a
+# maintainer reviews it and clicks "Publish" by hand.
+#
+# Authenticode code signing is NOT configured yet. Without it the exe and
+# the msi are unsigned: Windows SmartScreen will warn and some antivirus
+# products may flag them heuristically. Users should verify SHA256SUMS.txt
+# and the provenance attestation (see docs/BUILD.md). The signing steps
+# below run only when the repository variable AURA_SIGNING_METHOD is set
+# (see the comments there); they never create a placeholder or self-signed
+# signature. Signing happens BEFORE SHA256SUMS.txt and the attestation are
+# computed. Keep any certificate/credentials in a protected environment
+# with required reviewers.
+#
+# WiX: version 5.0.2 is pinned on purpose (WiX 6+ requires accepting the
+# Open Source Maintenance Fee EULA, which this project has not accepted).
+#
+# Third-party actions are pinned to full commit SHAs (tag in the trailing
+# comment), resolved with `git ls-remote` on 2026-11-21.
+
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing git tag to build, e.g. v0.1.0-beta"
+        required: true
+        type: string
+      create_draft_release:
+        description: "Create a DRAFT GitHub release with the files (never published automatically)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write      # OIDC token for the provenance attestation
+      attestations: write  # store the attestation
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      TAG: ${{ inputs.tag }}
+      WIX_VERSION: "5.0.2"
+      # Empty = unsigned build. Supported: "signtool-pfx" (see the signing
+      # steps). Set as a repository/environment VARIABLE, not a secret.
+      AURA_SIGNING_METHOD: ${{ vars.AURA_SIGNING_METHOD }}
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - name: Validate tag input
+        id: ver
+        run: |
+          if ($env:TAG -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$') {
+            throw "Tag must look like v1.2.3 or v1.2.3-beta: '$env:TAG'"
+          }
+          "version=$($env:TAG.Substring(1))" >> $env:GITHUB_OUTPUT
+
+      - name: Checkout tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+
+      - name: Set up Go (version from go.mod)
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: false   # no cache for release builds
+
+      - name: Verify module checksums
+        run: go mod verify
+
+      - name: Test
+        run: go test -count=1 -tags with_gvisor,with_wireguard,with_external_windivert ./...
+
+      - name: Install WiX Toolset 5.0.2 (pinned)
+        run: |
+          dotnet tool install --global wix --version $env:WIX_VERSION
+          "$env:USERPROFILE\.dotnet\tools" >> $env:GITHUB_PATH
+          & "$env:USERPROFILE\.dotnet\tools\wix.exe" extension add -g "WixToolset.Util.wixext/$env:WIX_VERSION"
+          & "$env:USERPROFILE\.dotnet\tools\wix.exe" --version
+          & "$env:USERPROFILE\.dotnet\tools\wix.exe" extension list -g
+
+      - name: Build exe (reproducible)
+        run: ./build.ps1 -Version "${{ steps.ver.outputs.version }}" -Strict -NoMsi
+
+      # ---------------------------------------------------------------
+      # Authenticode signing (OPTIONAL, skipped unless configured).
+      #
+      # "signtool-pfx": requires the secrets SIGN_CERT_PFX_BASE64 (base64 of
+      # a code-signing .pfx) and SIGN_CERT_PASSWORD, and uses signtool from
+      # the Windows SDK on the runner with an RFC 3161 timestamp.
+      #
+      # Other services can replace this step with the same `if:` gate, e.g.
+      #   - Azure Trusted Signing: azure/trusted-signing-action (OIDC login,
+      #     endpoint / account / certificate profile as variables);
+      #   - SignPath (free for OSS): signpath/github-action-submit-signing-request
+      #     with SIGNPATH_API_TOKEN and an approval in the SignPath project.
+      # Pin any such action to a full commit SHA. Never sign with a test or
+      # self-signed certificate and never claim a signature that is absent.
+      # ---------------------------------------------------------------
+      - name: Sign exe (Authenticode, optional)
+        if: ${{ vars.AURA_SIGNING_METHOD == 'signtool-pfx' }}
+        env:
+          SIGN_CERT_PFX_BASE64: ${{ secrets.SIGN_CERT_PFX_BASE64 }}
+          SIGN_CERT_PASSWORD: ${{ secrets.SIGN_CERT_PASSWORD }}
+          SIGN_TIMESTAMP_URL: ${{ vars.SIGN_TIMESTAMP_URL }}
+        run: ./.github/scripts/sign.ps1 -Path dist/aurasplit.exe -Description "AURA Split TR"
+
+      - name: Build MSI (WiX 5.0.2) around the exe
+        run: ./build.ps1 -Version "${{ steps.ver.outputs.version }}" -Strict -MsiOnly
+
+      - name: Sign MSI (Authenticode, optional)
+        if: ${{ vars.AURA_SIGNING_METHOD == 'signtool-pfx' }}
+        env:
+          SIGN_CERT_PFX_BASE64: ${{ secrets.SIGN_CERT_PFX_BASE64 }}
+          SIGN_CERT_PASSWORD: ${{ secrets.SIGN_CERT_PASSWORD }}
+          SIGN_TIMESTAMP_URL: ${{ vars.SIGN_TIMESTAMP_URL }}
+        run: ./.github/scripts/sign.ps1 -Path "dist/AuraSplitTR-${{ steps.ver.outputs.version }}-x64.msi" -Description "AURA Split TR"
+
+      - name: Signing status
+        run: |
+          if ($env:AURA_SIGNING_METHOD) {
+            Get-AuthenticodeSignature dist/aurasplit.exe, "dist/AuraSplitTR-${{ steps.ver.outputs.version }}-x64.msi" | Format-Table Status, Path -AutoSize
+          } else {
+            Write-Host "::warning::Authenticode signing is not configured (vars.AURA_SIGNING_METHOD is empty): the exe and the msi are UNSIGNED."
+          }
+
+      - name: Package
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          $msi = "dist/AuraSplitTR-$v-x64.msi"
+          if (-not (Test-Path $msi)) { throw "MSI missing: $msi" }
+          $pkg = Join-Path $env:RUNNER_TEMP "aurasplit-$v-windows-amd64"
+          New-Item -ItemType Directory -Force -Path $pkg | Out-Null
+          Copy-Item dist/aurasplit.exe, LICENSE, NOTICE, THIRD_PARTY_LICENSES.md, TRADEMARKS.md, README.md, SECURITY.md -Destination $pkg
+          $out = Join-Path $env:RUNNER_TEMP "out"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item dist/aurasplit.exe, $msi $out
+          Compress-Archive -Path "$pkg/*" -DestinationPath (Join-Path $out "aurasplit-$v-windows-amd64.zip")
+          # SHA256SUMS.txt: UTF-8 without BOM, LF, compatible with `sha256sum -c`.
+          $lines = Get-ChildItem $out -File | Sort-Object Name | ForEach-Object {
+            "$((Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower())  $($_.Name)"
+          }
+          [IO.File]::WriteAllText((Join-Path $out "SHA256SUMS.txt"), (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding($false)))
+          Get-Content (Join-Path $out "SHA256SUMS.txt")
+          "OUT_DIR=$out" >> $env:GITHUB_ENV
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            ${{ env.OUT_DIR }}/aurasplit.exe
+            ${{ env.OUT_DIR }}/AuraSplitTR-*-x64.msi
+            ${{ env.OUT_DIR }}/aurasplit-*.zip
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: aurasplit-${{ steps.ver.outputs.version }}-windows-amd64
+          path: ${{ env.OUT_DIR }}/*
+          if-no-files-found: error
+          retention-days: 30
+
+  draft-release:
+    needs: build
+    if: ${{ inputs.create_draft_release }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # required to create a (draft) release
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: aurasplit-${{ needs.build.outputs.version }}-windows-amd64
+          path: out
+
+      - name: Create DRAFT release (not published)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          # --draft: the release is invisible to the public until a maintainer
+          # publishes it manually. --verify-tag: never create a new tag here.
+          gh release create "$TAG" out/* \
+            --draft \
+            --verify-tag \
+            --prerelease \
+            --title "AURA Split TR $TAG" \
+            --notes "Draft created by the release workflow. Replace with docs/RELEASE_NOTES_$TAG.md before publishing. Install with the .msi. Check the workflow's 'Signing status' step before stating whether files are Authenticode-signed; verify SHA256SUMS.txt and the build provenance attestation."

@@ -1,0 +1,40 @@
+# Build output (release binaries are produced by CI, never committed)
+dist/
+*.exe
+*.exe~
+*.dll
+*.sys
+*.zip
+*.msi
+*.wixpdb
+*.test
+*.out
+obj/
+cmd/aurasplit/rsrc_windows_*.syso
+
+# Coverage / profiling
+coverage.*
+*.coverprofile
+cover.out
+*.prof
+*.pprof
+
+# Private runtime data: WireGuard configs contain private keys
+*.conf
+profile.json
+tunnel-state.json
+*.log
+*.log.*
+
+# Scratch / editor / OS
+scratch/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

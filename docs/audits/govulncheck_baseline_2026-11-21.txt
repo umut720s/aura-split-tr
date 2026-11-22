@@ -1,0 +1,1408 @@
+﻿go : go: downloading golang.org/x/vuln v1.10.0
+At line:1 char:302
++ ... tch {} } }; go run golang.org/x/vuln/cmd/govulncheck@latest -tags wit ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (go: downloading.../x/vuln v1.10.0:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+go: downloading golang.org/x/telemetry v0.0.0-20261116191925-e77a43154acb
+go: downloading golang.org/x/mod v0.43.0
+go: downloading golang.org/x/tools v0.53.0
+go: downloading golang.org/x/sync v0.25.0
+=== Symbol Results ===
+
+Vulnerability #1: GO-2026-6888
+    Excessive memory allocation when decompressing crafted streams in
+    github.com/andybalholm/brotli
+  More info: https://pkg.go.dev/vuln/GO-2026-6888
+  Module: github.com/andybalholm/brotli
+    Found in: github.com/andybalholm/brotli@v1.1.0
+    Fixed in: github.com/andybalholm/brotli@v1.2.7
+    Example traces found:
+      #1: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls brotli.Reader.Read
+      #2: internal/engine/engine.go:292:83: engine.Run calls brotli.decodeError.Error
+
+Vulnerability #2: GO-2026-6865
+    Panic on two-block frames in github.com/klauspost/compress
+  More info: https://pkg.go.dev/vuln/GO-2026-6865
+  Module: github.com/klauspost/compress
+    Found in: github.com/klauspost/compress@v1.19.1
+    Fixed in: github.com/klauspost/compress@v1.20.2
+    Example traces found:
+      #1: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls fse.Decompress
+      #2: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls huff0.ReadTable
+
+Vulnerability #3: GO-2026-6859
+    HTTP/1 server crash due to MaxBytesReader header race in net/http
+  More info: https://pkg.go.dev/vuln/GO-2026-6859
+  Standard library
+    Found in: net/http@go1.26.5
+    Fixed in: net/http@go1.26.11
+    Example traces found:
+      #1: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.CanonicalHeaderKey
+      #2: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Client.CloseIdleConnections
+      #3: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do
+      #4: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Get
+      #5: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Post
+      #6: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Error
+      #7: internal/engine/engine.go:16:2: engine.init calls sing.init, which eventually calls http.HandleFunc
+      #8: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.HandlerFunc.ServeHTTP
+      #9: internal/engine/engine.go:145:19: engine.newBox calls sing.New, which eventually calls http.Header.Add
+      #10: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Del
+      #11: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Get
+      #12: internal/provider/warp.go:49:16: provider.RegisterWARP calls http.Header.Set
+      #13: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.Header.Write
+      #14: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.NewRequest
+      #15: internal/provider/warp.go:45:40: provider.RegisterWARP calls http.NewRequestWithContext
+      #16: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ReadResponse
+      #17: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Request.Write
+      #18: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Response.Write
+      #19: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ResponseController.Hijack
+      #20: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ServeMux.ServeHTTP
+      #21: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.Server.Close
+      #22: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Server.Serve
+      #23: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Transport.Clone
+      #24: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.Transport.CloseIdleConnections
+      #25: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Transport.RoundTrip
+      #26: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.body.Close
+      #27: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.body.Read
+      #28: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.bodyEOFSignal.Close
+      #29: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.bodyEOFSignal.Read
+      #30: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bodyLocked.Read
+      #31: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bufioFlushWriter.Write
+      #32: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.cancelTimerBody.Close
+      #33: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.cancelTimerBody.Read
+      #34: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.checkConnErrorWriter.Write
+      #35: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.chunkWriter.Write
+      #36: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.connReader.Read
+      #37: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.expectContinueReader.Close
+      #38: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.expectContinueReader.Read
+      #39: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.gzipReader.Close
+      #40: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.gzipReader.Read
+      #41: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.loggingConn.Close
+      #42: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.loggingConn.Read
+      #43: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.loggingConn.Write
+      #44: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.maxBytesReader.Close
+      #45: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.maxBytesReader.Read
+      #46: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.onceCloseListener.Close
+      #47: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConn.Read
+      #48: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConnWriter.ReadFrom
+      #49: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.persistConnWriter.Write
+      #50: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.readTrackingBody.Close
+      #51: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readTrackingBody.Read
+      #52: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.readWriteCloserBody.CloseWrite
+      #53: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readWriteCloserBody.Read
+      #54: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.response.Flush
+      #55: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.FlushError
+      #56: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.Hijack
+      #57: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.response.ReadFrom
+      #58: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.response.Write
+      #59: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.WriteHeader
+      #60: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.response.WriteString
+      #61: internal/engine/engine.go:292:83: engine.Run calls http.transportReadFromServerError.Error
+
+Vulnerability #4: GO-2026-6809
+    Distrust compromised intermediate certificates in crypto/x509
+  More info: https://pkg.go.dev/vuln/GO-2026-6809
+  Standard library
+    Found in: crypto/x509@go1.26.5
+    Fixed in: crypto/x509@go1.26.10
+    Example traces found:
+      #1: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls x509.Certificate.Verify
+
+Vulnerability #5: GO-2026-6617
+    HTTP/2 server crash due to HPACK encoder race in net/http
+  More info: https://pkg.go.dev/vuln/GO-2026-6617
+  Module: golang.org/x/net
+    Found in: golang.org/x/net@v0.57.0
+    Fixed in: golang.org/x/net@v0.60.0
+    Example traces found:
+      #1: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http2.ClientConn.Close
+      #2: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.ConfigureTransports
+      #3: internal/engine/engine.go:292:83: engine.Run calls http2.ConnectionError.Error
+      #4: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.ErrCode.String
+      #5: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.FrameHeader.String
+      #6: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.FrameType.String
+      #7: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.FrameWriteRequest.String
+      #8: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.ReadFrame
+      #9: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.ReadFrameForHeader
+      #10: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.ReadFrameHeader
+      #11: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteContinuation
+      #12: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteGoAway
+      #13: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteHeaders
+      #14: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WritePing
+      #15: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteRSTStream
+      #16: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteSettings
+      #17: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteSettingsAck
+      #18: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteWindowUpdate
+      #19: internal/engine/engine.go:292:83: engine.Run calls http2.GoAwayError.Error
+      #20: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.Server.ServeConn
+      #21: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.Setting.String
+      #22: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.SettingID.String
+      #23: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.SettingsFrame.ForeachSetting
+      #24: internal/engine/engine.go:292:83: engine.Run calls http2.StreamError.Error
+      #25: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Transport.CloseIdleConnections
+      #26: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.Transport.NewClientConn
+      #27: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.Transport.RoundTrip
+      #28: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http2.bufferedWriterTimeoutWriter.Write
+      #29: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http2.chunkWriter.Write
+      #30: internal/engine/engine.go:292:83: engine.Run calls http2.connError.Error
+      #31: internal/engine/engine.go:292:83: engine.Run calls http2.duplicatePseudoHeaderError.Error
+      #32: internal/provider/warp.go:67:2: provider.RegisterWARP calls http2.gzipReader.Close
+      #33: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http2.gzipReader.Read
+      #34: internal/engine/engine.go:292:83: engine.Run calls http2.headerFieldNameError.Error
+      #35: internal/engine/engine.go:292:83: engine.Run calls http2.headerFieldValueError.Error
+      #36: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.netHTTPClientConn.RoundTrip
+      #37: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.noDialH2RoundTripper.NewClientConn
+      #38: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.noDialH2RoundTripper.RoundTrip
+      #39: internal/engine/engine.go:292:83: engine.Run calls http2.pseudoHeaderError.Error
+      #40: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http2.requestBody.Close
+      #41: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http2.requestBody.Read
+      #42: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http2.responseWriter.Flush
+      #43: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.responseWriter.FlushError
+      #44: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.responseWriter.SetWriteDeadline
+      #45: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http2.responseWriter.Write
+      #46: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.responseWriter.WriteHeader
+      #47: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which eventually calls http2.responseWriter.WriteString
+      #48: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http2.stickyErrWriter.Write
+      #49: internal/provider/warp.go:67:2: provider.RegisterWARP calls http2.transportResponseBody.Close
+      #50: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http2.transportResponseBody.Read
+      #51: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.unencryptedTransport.RoundTrip
+      #52: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.writeData.String
+
+  Standard library
+    Found in: net/http@go1.26.5
+    Fixed in: net/http@go1.26.9
+    Example traces found:
+      #1: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.CanonicalHeaderKey
+      #2: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.CanonicalHeaderKey
+      #3: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Client.CloseIdleConnections
+      #4: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Client.CloseIdleConnections
+      #5: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do
+      #6: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do
+      #7: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Get
+      #8: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Get
+      #9: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Post
+      #10: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Post
+      #11: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Error
+      #12: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Error
+      #13: internal/engine/engine.go:16:2: engine.init calls sing.init, which eventually calls http.HandleFunc
+      #14: internal/engine/engine.go:16:2: engine.init calls sing.init, which eventually calls http.HandleFunc
+      #15: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.HandlerFunc.ServeHTTP
+      #16: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.HandlerFunc.ServeHTTP
+      #17: internal/engine/engine.go:145:19: engine.newBox calls sing.New, which eventually calls http.Header.Add
+      #18: internal/engine/engine.go:145:19: engine.newBox calls sing.New, which eventually calls http.Header.Add
+      #19: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Del
+      #20: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Del
+      #21: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Get
+      #22: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Get
+      #23: internal/provider/warp.go:49:16: provider.RegisterWARP calls http.Header.Set
+      #24: internal/provider/warp.go:49:16: provider.RegisterWARP calls http.Header.Set
+      #25: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.Header.Write
+      #26: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.Header.Write
+      #27: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.NewRequest
+      #28: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.NewRequest
+      #29: internal/provider/warp.go:45:40: provider.RegisterWARP calls http.NewRequestWithContext
+      #30: internal/provider/warp.go:45:40: provider.RegisterWARP calls http.NewRequestWithContext
+      #31: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ReadResponse
+      #32: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ReadResponse
+      #33: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Request.Write
+      #34: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Request.Write
+      #35: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Response.Write
+      #36: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Response.Write
+      #37: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ResponseController.Hijack
+      #38: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ResponseController.Hijack
+      #39: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ServeMux.ServeHTTP
+      #40: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ServeMux.ServeHTTP
+      #41: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.Server.Close
+      #42: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.Server.Close
+      #43: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Server.Serve
+      #44: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Server.Serve
+      #45: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Transport.Clone
+      #46: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Transport.Clone
+      #47: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.Transport.CloseIdleConnections
+      #48: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.Transport.CloseIdleConnections
+      #49: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Transport.RoundTrip
+      #50: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Transport.RoundTrip
+      #51: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.body.Close
+      #52: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.body.Close
+      #53: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.body.Read
+      #54: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.body.Read
+      #55: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.bodyEOFSignal.Close
+      #56: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.bodyEOFSignal.Close
+      #57: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.bodyEOFSignal.Read
+      #58: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.bodyEOFSignal.Read
+      #59: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bodyLocked.Read
+      #60: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bodyLocked.Read
+      #61: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bufioFlushWriter.Write
+      #62: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bufioFlushWriter.Write
+      #63: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.cancelTimerBody.Close
+      #64: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.cancelTimerBody.Close
+      #65: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.cancelTimerBody.Read
+      #66: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.cancelTimerBody.Read
+      #67: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.checkConnErrorWriter.Write
+      #68: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.checkConnErrorWriter.Write
+      #69: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.chunkWriter.Write
+      #70: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.chunkWriter.Write
+      #71: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.connReader.Read
+      #72: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.connReader.Read
+      #73: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.expectContinueReader.Close
+      #74: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.expectContinueReader.Close
+      #75: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.expectContinueReader.Read
+      #76: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.expectContinueReader.Read
+      #77: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.gzipReader.Close
+      #78: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.gzipReader.Close
+      #79: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.gzipReader.Read
+      #80: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.gzipReader.Read
+      #81: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.http2ClientConn.Close
+      #82: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.http2ClientConn.Close
+      #83: internal/engine/engine.go:292:83: engine.Run calls http.http2ConnectionError.Error
+      #84: internal/engine/engine.go:292:83: engine.Run calls http.http2ConnectionError.Error
+      #85: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2ErrCode.String
+      #86: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2ErrCode.String
+      #87: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameHeader.String
+      #88: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameHeader.String
+      #89: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameType.String
+      #90: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameType.String
+      #91: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameWriteRequest.String
+      #92: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameWriteRequest.String
+      #93: internal/engine/engine.go:292:83: engine.Run calls http.http2GoAwayError.Error
+      #94: internal/engine/engine.go:292:83: engine.Run calls http.http2GoAwayError.Error
+      #95: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2Setting.String
+      #96: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2Setting.String
+      #97: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2SettingID.String
+      #98: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2SettingID.String
+      #99: internal/engine/engine.go:292:83: engine.Run calls http.http2StreamError.Error
+      #100: internal/engine/engine.go:292:83: engine.Run calls http.http2StreamError.Error
+      #101: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2bufferedWriterTimeoutWriter.Write
+      #102: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2bufferedWriterTimeoutWriter.Write
+      #103: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2chunkWriter.Write
+      #104: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2chunkWriter.Write
+      #105: internal/engine/engine.go:292:83: engine.Run calls http.http2connError.Error
+      #106: internal/engine/engine.go:292:83: engine.Run calls http.http2connError.Error
+      #107: internal/engine/engine.go:292:83: engine.Run calls http.http2duplicatePseudoHeaderError.Error
+      #108: internal/engine/engine.go:292:83: engine.Run calls http.http2duplicatePseudoHeaderError.Error
+      #109: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.http2gzipReader.Close
+      #110: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.http2gzipReader.Close
+      #111: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2gzipReader.Read
+      #112: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2gzipReader.Read
+      #113: internal/engine/engine.go:292:83: engine.Run calls http.http2headerFieldNameError.Error
+      #114: internal/engine/engine.go:292:83: engine.Run calls http.http2headerFieldNameError.Error
+      #115: internal/engine/engine.go:292:83: engine.Run calls http.http2headerFieldValueError.Error
+      #116: internal/engine/engine.go:292:83: engine.Run calls http.http2headerFieldValueError.Error
+      #117: internal/engine/engine.go:292:83: engine.Run calls http.http2pseudoHeaderError.Error
+      #118: internal/engine/engine.go:292:83: engine.Run calls http.http2pseudoHeaderError.Error
+      #119: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.http2requestBody.Close
+      #120: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.http2requestBody.Close
+      #121: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2requestBody.Read
+      #122: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2requestBody.Read
+      #123: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2responseWriter.Flush
+      #124: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2responseWriter.Flush
+      #125: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.http2responseWriter.FlushError
+      #126: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.http2responseWriter.FlushError
+      #127: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.http2responseWriter.Write
+      #128: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.http2responseWriter.Write
+      #129: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.http2responseWriter.WriteHeader
+      #130: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.http2responseWriter.WriteHeader
+      #131: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.http2responseWriter.WriteString
+      #132: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.http2responseWriter.WriteString
+      #133: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2stickyErrWriter.Write
+      #134: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2stickyErrWriter.Write
+      #135: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.http2transportResponseBody.Close
+      #136: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.http2transportResponseBody.Close
+      #137: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2transportResponseBody.Read
+      #138: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2transportResponseBody.Read
+      #139: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2writeData.String
+      #140: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2writeData.String
+      #141: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.loggingConn.Close
+      #142: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.loggingConn.Close
+      #143: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.loggingConn.Read
+      #144: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.loggingConn.Read
+      #145: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.loggingConn.Write
+      #146: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.loggingConn.Write
+      #147: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.maxBytesReader.Close
+      #148: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.maxBytesReader.Close
+      #149: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.maxBytesReader.Read
+      #150: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.maxBytesReader.Read
+      #151: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.onceCloseListener.Close
+      #152: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.onceCloseListener.Close
+      #153: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConn.Read
+      #154: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConn.Read
+      #155: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConnWriter.ReadFrom
+      #156: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConnWriter.ReadFrom
+      #157: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.persistConnWriter.Write
+      #158: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.persistConnWriter.Write
+      #159: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.readTrackingBody.Close
+      #160: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.readTrackingBody.Close
+      #161: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readTrackingBody.Read
+      #162: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readTrackingBody.Read
+      #163: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.readWriteCloserBody.CloseWrite
+      #164: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.readWriteCloserBody.CloseWrite
+      #165: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readWriteCloserBody.Read
+      #166: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readWriteCloserBody.Read
+      #167: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.response.Flush
+      #168: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.response.Flush
+      #169: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.FlushError
+      #170: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.FlushError
+      #171: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.Hijack
+      #172: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.Hijack
+      #173: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.response.ReadFrom
+      #174: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.response.ReadFrom
+      #175: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.response.Write
+      #176: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.response.Write
+      #177: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.WriteHeader
+      #178: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.WriteHeader
+      #179: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.response.WriteString
+      #180: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.response.WriteString
+      #181: internal/engine/engine.go:292:83: engine.Run calls http.transportReadFromServerError.Error
+      #182: internal/engine/engine.go:292:83: engine.Run calls http.transportReadFromServerError.Error
+
+Vulnerability #6: GO-2026-6613
+    HTTP/1 server connection desynchronization after 2xx CONNECT response in
+    net/http
+  More info: https://pkg.go.dev/vuln/GO-2026-6613
+  Standard library
+    Found in: net/http@go1.26.5
+    Fixed in: net/http@go1.26.9
+    Example traces found:
+      #1: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.CanonicalHeaderKey
+      #2: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Client.CloseIdleConnections
+      #3: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do
+      #4: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Get
+      #5: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Post
+      #6: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Error
+      #7: internal/engine/engine.go:16:2: engine.init calls sing.init, which eventually calls http.HandleFunc
+      #8: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.HandlerFunc.ServeHTTP
+      #9: internal/engine/engine.go:145:19: engine.newBox calls sing.New, which eventually calls http.Header.Add
+      #10: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Del
+      #11: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Get
+      #12: internal/provider/warp.go:49:16: provider.RegisterWARP calls http.Header.Set
+      #13: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.Header.Write
+      #14: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.NewRequest
+      #15: internal/provider/warp.go:45:40: provider.RegisterWARP calls http.NewRequestWithContext
+      #16: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ReadResponse
+      #17: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Request.Write
+      #18: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Response.Write
+      #19: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ResponseController.Hijack
+      #20: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ServeMux.ServeHTTP
+      #21: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.Server.Close
+      #22: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Server.Serve
+      #23: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Transport.Clone
+      #24: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.Transport.CloseIdleConnections
+      #25: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Transport.RoundTrip
+      #26: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.body.Close
+      #27: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.body.Read
+      #28: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.bodyEOFSignal.Close
+      #29: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.bodyEOFSignal.Read
+      #30: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bodyLocked.Read
+      #31: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bufioFlushWriter.Write
+      #32: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.cancelTimerBody.Close
+      #33: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.cancelTimerBody.Read
+      #34: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.checkConnErrorWriter.Write
+      #35: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.chunkWriter.Write
+      #36: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.connReader.Read
+      #37: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.expectContinueReader.Close
+      #38: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.expectContinueReader.Read
+      #39: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.gzipReader.Close
+      #40: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.gzipReader.Read
+      #41: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.loggingConn.Close
+      #42: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.loggingConn.Read
+      #43: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.loggingConn.Write
+      #44: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.maxBytesReader.Close
+      #45: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.maxBytesReader.Read
+      #46: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.onceCloseListener.Close
+      #47: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConn.Read
+      #48: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConnWriter.ReadFrom
+      #49: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.persistConnWriter.Write
+      #50: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.readTrackingBody.Close
+      #51: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readTrackingBody.Read
+      #52: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.readWriteCloserBody.CloseWrite
+      #53: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readWriteCloserBody.Read
+      #54: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.response.Flush
+      #55: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.FlushError
+      #56: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.Hijack
+      #57: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.response.ReadFrom
+      #58: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.response.Write
+      #59: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.WriteHeader
+      #60: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.response.WriteString
+      #61: internal/engine/engine.go:292:83: engine.Run calls http.transportReadFromServerError.Error
+
+Vulnerability #7: GO-2026-6612
+    Double flow control refund on HTTP/2 server streams in net/http
+  More info: https://pkg.go.dev/vuln/GO-2026-6612
+  Module: golang.org/x/net
+    Found in: golang.org/x/net@v0.57.0
+    Fixed in: golang.org/x/net@v0.60.0
+    Example traces found:
+      #1: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http2.ClientConn.Close
+      #2: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.ConfigureTransports
+      #3: internal/engine/engine.go:292:83: engine.Run calls http2.ConnectionError.Error
+      #4: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.ErrCode.String
+      #5: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.FrameHeader.String
+      #6: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.FrameType.String
+      #7: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.FrameWriteRequest.String
+      #8: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.ReadFrame
+      #9: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.ReadFrameForHeader
+      #10: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.ReadFrameHeader
+      #11: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteContinuation
+      #12: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteGoAway
+      #13: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteHeaders
+      #14: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WritePing
+      #15: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteRSTStream
+      #16: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteSettings
+      #17: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteSettingsAck
+      #18: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteWindowUpdate
+      #19: internal/engine/engine.go:292:83: engine.Run calls http2.GoAwayError.Error
+      #20: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.Server.ServeConn
+      #21: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.Setting.String
+      #22: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.SettingID.String
+      #23: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.SettingsFrame.ForeachSetting
+      #24: internal/engine/engine.go:292:83: engine.Run calls http2.StreamError.Error
+      #25: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Transport.CloseIdleConnections
+      #26: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.Transport.NewClientConn
+      #27: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.Transport.RoundTrip
+      #28: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http2.bufferedWriterTimeoutWriter.Write
+      #29: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http2.chunkWriter.Write
+      #30: internal/engine/engine.go:292:83: engine.Run calls http2.connError.Error
+      #31: internal/engine/engine.go:292:83: engine.Run calls http2.duplicatePseudoHeaderError.Error
+      #32: internal/provider/warp.go:67:2: provider.RegisterWARP calls http2.gzipReader.Close
+      #33: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http2.gzipReader.Read
+      #34: internal/engine/engine.go:292:83: engine.Run calls http2.headerFieldNameError.Error
+      #35: internal/engine/engine.go:292:83: engine.Run calls http2.headerFieldValueError.Error
+      #36: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.netHTTPClientConn.RoundTrip
+      #37: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.noDialH2RoundTripper.NewClientConn
+      #38: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.noDialH2RoundTripper.RoundTrip
+      #39: internal/engine/engine.go:292:83: engine.Run calls http2.pseudoHeaderError.Error
+      #40: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http2.requestBody.Close
+      #41: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http2.requestBody.Read
+      #42: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http2.responseWriter.Flush
+      #43: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.responseWriter.FlushError
+      #44: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.responseWriter.SetWriteDeadline
+      #45: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http2.responseWriter.Write
+      #46: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.responseWriter.WriteHeader
+      #47: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which eventually calls http2.responseWriter.WriteString
+      #48: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http2.stickyErrWriter.Write
+      #49: internal/provider/warp.go:67:2: provider.RegisterWARP calls http2.transportResponseBody.Close
+      #50: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http2.transportResponseBody.Read
+      #51: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.unencryptedTransport.RoundTrip
+      #52: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.writeData.String
+
+  Standard library
+    Found in: net/http@go1.26.5
+    Fixed in: net/http@go1.26.9
+    Example traces found:
+      #1: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.CanonicalHeaderKey
+      #2: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.CanonicalHeaderKey
+      #3: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Client.CloseIdleConnections
+      #4: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Client.CloseIdleConnections
+      #5: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do
+      #6: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do
+      #7: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Get
+      #8: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Get
+      #9: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Post
+      #10: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Post
+      #11: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Error
+      #12: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Error
+      #13: internal/engine/engine.go:16:2: engine.init calls sing.init, which eventually calls http.HandleFunc
+      #14: internal/engine/engine.go:16:2: engine.init calls sing.init, which eventually calls http.HandleFunc
+      #15: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.HandlerFunc.ServeHTTP
+      #16: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.HandlerFunc.ServeHTTP
+      #17: internal/engine/engine.go:145:19: engine.newBox calls sing.New, which eventually calls http.Header.Add
+      #18: internal/engine/engine.go:145:19: engine.newBox calls sing.New, which eventually calls http.Header.Add
+      #19: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Del
+      #20: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Del
+      #21: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Get
+      #22: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Get
+      #23: internal/provider/warp.go:49:16: provider.RegisterWARP calls http.Header.Set
+      #24: internal/provider/warp.go:49:16: provider.RegisterWARP calls http.Header.Set
+      #25: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.Header.Write
+      #26: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.Header.Write
+      #27: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.NewRequest
+      #28: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.NewRequest
+      #29: internal/provider/warp.go:45:40: provider.RegisterWARP calls http.NewRequestWithContext
+      #30: internal/provider/warp.go:45:40: provider.RegisterWARP calls http.NewRequestWithContext
+      #31: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ReadResponse
+      #32: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ReadResponse
+      #33: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Request.Write
+      #34: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Request.Write
+      #35: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Response.Write
+      #36: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Response.Write
+      #37: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ResponseController.Hijack
+      #38: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ResponseController.Hijack
+      #39: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ServeMux.ServeHTTP
+      #40: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ServeMux.ServeHTTP
+      #41: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.Server.Close
+      #42: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.Server.Close
+      #43: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Server.Serve
+      #44: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Server.Serve
+      #45: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Transport.Clone
+      #46: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Transport.Clone
+      #47: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.Transport.CloseIdleConnections
+      #48: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.Transport.CloseIdleConnections
+      #49: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Transport.RoundTrip
+      #50: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Transport.RoundTrip
+      #51: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.body.Close
+      #52: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.body.Close
+      #53: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.body.Read
+      #54: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.body.Read
+      #55: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.bodyEOFSignal.Close
+      #56: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.bodyEOFSignal.Close
+      #57: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.bodyEOFSignal.Read
+      #58: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.bodyEOFSignal.Read
+      #59: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bodyLocked.Read
+      #60: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bodyLocked.Read
+      #61: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bufioFlushWriter.Write
+      #62: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bufioFlushWriter.Write
+      #63: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.cancelTimerBody.Close
+      #64: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.cancelTimerBody.Close
+      #65: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.cancelTimerBody.Read
+      #66: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.cancelTimerBody.Read
+      #67: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.checkConnErrorWriter.Write
+      #68: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.checkConnErrorWriter.Write
+      #69: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.chunkWriter.Write
+      #70: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.chunkWriter.Write
+      #71: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.connReader.Read
+      #72: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.connReader.Read
+      #73: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.expectContinueReader.Close
+      #74: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.expectContinueReader.Close
+      #75: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.expectContinueReader.Read
+      #76: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.expectContinueReader.Read
+      #77: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.gzipReader.Close
+      #78: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.gzipReader.Close
+      #79: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.gzipReader.Read
+      #80: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.gzipReader.Read
+      #81: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.http2ClientConn.Close
+      #82: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.http2ClientConn.Close
+      #83: internal/engine/engine.go:292:83: engine.Run calls http.http2ConnectionError.Error
+      #84: internal/engine/engine.go:292:83: engine.Run calls http.http2ConnectionError.Error
+      #85: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2ErrCode.String
+      #86: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2ErrCode.String
+      #87: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameHeader.String
+      #88: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameHeader.String
+      #89: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameType.String
+      #90: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameType.String
+      #91: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameWriteRequest.String
+      #92: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameWriteRequest.String
+      #93: internal/engine/engine.go:292:83: engine.Run calls http.http2GoAwayError.Error
+      #94: internal/engine/engine.go:292:83: engine.Run calls http.http2GoAwayError.Error
+      #95: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2Setting.String
+      #96: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2Setting.String
+      #97: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2SettingID.String
+      #98: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2SettingID.String
+      #99: internal/engine/engine.go:292:83: engine.Run calls http.http2StreamError.Error
+      #100: internal/engine/engine.go:292:83: engine.Run calls http.http2StreamError.Error
+      #101: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2bufferedWriterTimeoutWriter.Write
+      #102: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2bufferedWriterTimeoutWriter.Write
+      #103: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2chunkWriter.Write
+      #104: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2chunkWriter.Write
+      #105: internal/engine/engine.go:292:83: engine.Run calls http.http2connError.Error
+      #106: internal/engine/engine.go:292:83: engine.Run calls http.http2connError.Error
+      #107: internal/engine/engine.go:292:83: engine.Run calls http.http2duplicatePseudoHeaderError.Error
+      #108: internal/engine/engine.go:292:83: engine.Run calls http.http2duplicatePseudoHeaderError.Error
+      #109: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.http2gzipReader.Close
+      #110: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.http2gzipReader.Close
+      #111: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2gzipReader.Read
+      #112: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2gzipReader.Read
+      #113: internal/engine/engine.go:292:83: engine.Run calls http.http2headerFieldNameError.Error
+      #114: internal/engine/engine.go:292:83: engine.Run calls http.http2headerFieldNameError.Error
+      #115: internal/engine/engine.go:292:83: engine.Run calls http.http2headerFieldValueError.Error
+      #116: internal/engine/engine.go:292:83: engine.Run calls http.http2headerFieldValueError.Error
+      #117: internal/engine/engine.go:292:83: engine.Run calls http.http2pseudoHeaderError.Error
+      #118: internal/engine/engine.go:292:83: engine.Run calls http.http2pseudoHeaderError.Error
+      #119: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.http2requestBody.Close
+      #120: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.http2requestBody.Close
+      #121: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2requestBody.Read
+      #122: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2requestBody.Read
+      #123: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2responseWriter.Flush
+      #124: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2responseWriter.Flush
+      #125: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.http2responseWriter.FlushError
+      #126: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.http2responseWriter.FlushError
+      #127: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.http2responseWriter.Write
+      #128: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.http2responseWriter.Write
+      #129: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.http2responseWriter.WriteHeader
+      #130: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.http2responseWriter.WriteHeader
+      #131: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.http2responseWriter.WriteString
+      #132: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.http2responseWriter.WriteString
+      #133: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2stickyErrWriter.Write
+      #134: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2stickyErrWriter.Write
+      #135: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.http2transportResponseBody.Close
+      #136: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.http2transportResponseBody.Close
+      #137: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2transportResponseBody.Read
+      #138: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2transportResponseBody.Read
+      #139: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2writeData.String
+      #140: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2writeData.String
+      #141: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.loggingConn.Close
+      #142: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.loggingConn.Close
+      #143: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.loggingConn.Read
+      #144: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.loggingConn.Read
+      #145: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.loggingConn.Write
+      #146: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.loggingConn.Write
+      #147: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.maxBytesReader.Close
+      #148: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.maxBytesReader.Close
+      #149: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.maxBytesReader.Read
+      #150: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.maxBytesReader.Read
+      #151: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.onceCloseListener.Close
+      #152: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.onceCloseListener.Close
+      #153: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConn.Read
+      #154: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConn.Read
+      #155: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConnWriter.ReadFrom
+      #156: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConnWriter.ReadFrom
+      #157: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.persistConnWriter.Write
+      #158: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.persistConnWriter.Write
+      #159: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.readTrackingBody.Close
+      #160: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.readTrackingBody.Close
+      #161: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readTrackingBody.Read
+      #162: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readTrackingBody.Read
+      #163: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.readWriteCloserBody.CloseWrite
+      #164: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.readWriteCloserBody.CloseWrite
+      #165: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readWriteCloserBody.Read
+      #166: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readWriteCloserBody.Read
+      #167: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.response.Flush
+      #168: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.response.Flush
+      #169: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.FlushError
+      #170: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.FlushError
+      #171: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.Hijack
+      #172: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.Hijack
+      #173: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.response.ReadFrom
+      #174: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.response.ReadFrom
+      #175: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.response.Write
+      #176: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.response.Write
+      #177: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.WriteHeader
+      #178: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.WriteHeader
+      #179: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.response.WriteString
+      #180: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.response.WriteString
+      #181: internal/engine/engine.go:292:83: engine.Run calls http.transportReadFromServerError.Error
+      #182: internal/engine/engine.go:292:83: engine.Run calls http.transportReadFromServerError.Error
+
+Vulnerability #8: GO-2026-6611
+    Excessive CPU consumption from repeated initial window changes in net/http
+  More info: https://pkg.go.dev/vuln/GO-2026-6611
+  Module: golang.org/x/net
+    Found in: golang.org/x/net@v0.57.0
+    Fixed in: golang.org/x/net@v0.60.0
+    Example traces found:
+      #1: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http2.ClientConn.Close
+      #2: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.ConfigureTransports
+      #3: internal/engine/engine.go:292:83: engine.Run calls http2.ConnectionError.Error
+      #4: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.ErrCode.String
+      #5: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.FrameHeader.String
+      #6: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.FrameType.String
+      #7: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.FrameWriteRequest.String
+      #8: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.ReadFrame
+      #9: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.ReadFrameForHeader
+      #10: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.ReadFrameHeader
+      #11: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteContinuation
+      #12: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteGoAway
+      #13: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteHeaders
+      #14: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WritePing
+      #15: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteRSTStream
+      #16: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteSettings
+      #17: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteSettingsAck
+      #18: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteWindowUpdate
+      #19: internal/engine/engine.go:292:83: engine.Run calls http2.GoAwayError.Error
+      #20: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.Server.ServeConn
+      #21: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.Setting.String
+      #22: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.SettingID.String
+      #23: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.SettingsFrame.ForeachSetting
+      #24: internal/engine/engine.go:292:83: engine.Run calls http2.StreamError.Error
+      #25: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Transport.CloseIdleConnections
+      #26: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.Transport.NewClientConn
+      #27: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.Transport.RoundTrip
+      #28: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http2.bufferedWriterTimeoutWriter.Write
+      #29: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http2.chunkWriter.Write
+      #30: internal/engine/engine.go:292:83: engine.Run calls http2.connError.Error
+      #31: internal/engine/engine.go:292:83: engine.Run calls http2.duplicatePseudoHeaderError.Error
+      #32: internal/provider/warp.go:67:2: provider.RegisterWARP calls http2.gzipReader.Close
+      #33: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http2.gzipReader.Read
+      #34: internal/engine/engine.go:292:83: engine.Run calls http2.headerFieldNameError.Error
+      #35: internal/engine/engine.go:292:83: engine.Run calls http2.headerFieldValueError.Error
+      #36: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.netHTTPClientConn.RoundTrip
+      #37: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.noDialH2RoundTripper.NewClientConn
+      #38: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.noDialH2RoundTripper.RoundTrip
+      #39: internal/engine/engine.go:292:83: engine.Run calls http2.pseudoHeaderError.Error
+      #40: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http2.requestBody.Close
+      #41: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http2.requestBody.Read
+      #42: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http2.responseWriter.Flush
+      #43: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.responseWriter.FlushError
+      #44: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.responseWriter.SetWriteDeadline
+      #45: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http2.responseWriter.Write
+      #46: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.responseWriter.WriteHeader
+      #47: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which eventually calls http2.responseWriter.WriteString
+      #48: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http2.stickyErrWriter.Write
+      #49: internal/provider/warp.go:67:2: provider.RegisterWARP calls http2.transportResponseBody.Close
+      #50: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http2.transportResponseBody.Read
+      #51: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.unencryptedTransport.RoundTrip
+      #52: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.writeData.String
+
+  Standard library
+    Found in: net/http@go1.26.5
+    Fixed in: net/http@go1.26.9
+    Example traces found:
+      #1: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.CanonicalHeaderKey
+      #2: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.CanonicalHeaderKey
+      #3: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Client.CloseIdleConnections
+      #4: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Client.CloseIdleConnections
+      #5: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do
+      #6: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do
+      #7: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Get
+      #8: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Get
+      #9: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Post
+      #10: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Post
+      #11: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Error
+      #12: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Error
+      #13: internal/engine/engine.go:16:2: engine.init calls sing.init, which eventually calls http.HandleFunc
+      #14: internal/engine/engine.go:16:2: engine.init calls sing.init, which eventually calls http.HandleFunc
+      #15: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.HandlerFunc.ServeHTTP
+      #16: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.HandlerFunc.ServeHTTP
+      #17: internal/engine/engine.go:145:19: engine.newBox calls sing.New, which eventually calls http.Header.Add
+      #18: internal/engine/engine.go:145:19: engine.newBox calls sing.New, which eventually calls http.Header.Add
+      #19: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Del
+      #20: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Del
+      #21: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Get
+      #22: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Get
+      #23: internal/provider/warp.go:49:16: provider.RegisterWARP calls http.Header.Set
+      #24: internal/provider/warp.go:49:16: provider.RegisterWARP calls http.Header.Set
+      #25: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.Header.Write
+      #26: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.Header.Write
+      #27: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.NewRequest
+      #28: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.NewRequest
+      #29: internal/provider/warp.go:45:40: provider.RegisterWARP calls http.NewRequestWithContext
+      #30: internal/provider/warp.go:45:40: provider.RegisterWARP calls http.NewRequestWithContext
+      #31: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ReadResponse
+      #32: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ReadResponse
+      #33: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Request.Write
+      #34: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Request.Write
+      #35: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Response.Write
+      #36: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Response.Write
+      #37: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ResponseController.Hijack
+      #38: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ResponseController.Hijack
+      #39: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ServeMux.ServeHTTP
+      #40: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ServeMux.ServeHTTP
+      #41: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.Server.Close
+      #42: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.Server.Close
+      #43: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Server.Serve
+      #44: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Server.Serve
+      #45: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Transport.Clone
+      #46: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Transport.Clone
+      #47: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.Transport.CloseIdleConnections
+      #48: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.Transport.CloseIdleConnections
+      #49: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Transport.RoundTrip
+      #50: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Transport.RoundTrip
+      #51: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.body.Close
+      #52: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.body.Close
+      #53: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.body.Read
+      #54: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.body.Read
+      #55: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.bodyEOFSignal.Close
+      #56: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.bodyEOFSignal.Close
+      #57: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.bodyEOFSignal.Read
+      #58: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.bodyEOFSignal.Read
+      #59: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bodyLocked.Read
+      #60: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bodyLocked.Read
+      #61: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bufioFlushWriter.Write
+      #62: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bufioFlushWriter.Write
+      #63: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.cancelTimerBody.Close
+      #64: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.cancelTimerBody.Close
+      #65: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.cancelTimerBody.Read
+      #66: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.cancelTimerBody.Read
+      #67: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.checkConnErrorWriter.Write
+      #68: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.checkConnErrorWriter.Write
+      #69: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.chunkWriter.Write
+      #70: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.chunkWriter.Write
+      #71: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.connReader.Read
+      #72: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.connReader.Read
+      #73: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.expectContinueReader.Close
+      #74: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.expectContinueReader.Close
+      #75: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.expectContinueReader.Read
+      #76: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.expectContinueReader.Read
+      #77: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.gzipReader.Close
+      #78: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.gzipReader.Close
+      #79: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.gzipReader.Read
+      #80: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.gzipReader.Read
+      #81: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.http2ClientConn.Close
+      #82: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.http2ClientConn.Close
+      #83: internal/engine/engine.go:292:83: engine.Run calls http.http2ConnectionError.Error
+      #84: internal/engine/engine.go:292:83: engine.Run calls http.http2ConnectionError.Error
+      #85: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2ErrCode.String
+      #86: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2ErrCode.String
+      #87: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameHeader.String
+      #88: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameHeader.String
+      #89: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameType.String
+      #90: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameType.String
+      #91: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameWriteRequest.String
+      #92: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameWriteRequest.String
+      #93: internal/engine/engine.go:292:83: engine.Run calls http.http2GoAwayError.Error
+      #94: internal/engine/engine.go:292:83: engine.Run calls http.http2GoAwayError.Error
+      #95: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2Setting.String
+      #96: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2Setting.String
+      #97: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2SettingID.String
+      #98: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2SettingID.String
+      #99: internal/engine/engine.go:292:83: engine.Run calls http.http2StreamError.Error
+      #100: internal/engine/engine.go:292:83: engine.Run calls http.http2StreamError.Error
+      #101: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2bufferedWriterTimeoutWriter.Write
+      #102: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2bufferedWriterTimeoutWriter.Write
+      #103: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2chunkWriter.Write
+      #104: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2chunkWriter.Write
+      #105: internal/engine/engine.go:292:83: engine.Run calls http.http2connError.Error
+      #106: internal/engine/engine.go:292:83: engine.Run calls http.http2connError.Error
+      #107: internal/engine/engine.go:292:83: engine.Run calls http.http2duplicatePseudoHeaderError.Error
+      #108: internal/engine/engine.go:292:83: engine.Run calls http.http2duplicatePseudoHeaderError.Error
+      #109: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.http2gzipReader.Close
+      #110: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.http2gzipReader.Close
+      #111: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2gzipReader.Read
+      #112: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2gzipReader.Read
+      #113: internal/engine/engine.go:292:83: engine.Run calls http.http2headerFieldNameError.Error
+      #114: internal/engine/engine.go:292:83: engine.Run calls http.http2headerFieldNameError.Error
+      #115: internal/engine/engine.go:292:83: engine.Run calls http.http2headerFieldValueError.Error
+      #116: internal/engine/engine.go:292:83: engine.Run calls http.http2headerFieldValueError.Error
+      #117: internal/engine/engine.go:292:83: engine.Run calls http.http2pseudoHeaderError.Error
+      #118: internal/engine/engine.go:292:83: engine.Run calls http.http2pseudoHeaderError.Error
+      #119: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.http2requestBody.Close
+      #120: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.http2requestBody.Close
+      #121: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2requestBody.Read
+      #122: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2requestBody.Read
+      #123: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2responseWriter.Flush
+      #124: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2responseWriter.Flush
+      #125: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.http2responseWriter.FlushError
+      #126: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.http2responseWriter.FlushError
+      #127: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.http2responseWriter.Write
+      #128: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.http2responseWriter.Write
+      #129: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.http2responseWriter.WriteHeader
+      #130: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.http2responseWriter.WriteHeader
+      #131: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.http2responseWriter.WriteString
+      #132: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.http2responseWriter.WriteString
+      #133: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2stickyErrWriter.Write
+      #134: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2stickyErrWriter.Write
+      #135: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.http2transportResponseBody.Close
+      #136: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.http2transportResponseBody.Close
+      #137: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2transportResponseBody.Read
+      #138: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2transportResponseBody.Read
+      #139: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2writeData.String
+      #140: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2writeData.String
+      #141: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.loggingConn.Close
+      #142: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.loggingConn.Close
+      #143: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.loggingConn.Read
+      #144: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.loggingConn.Read
+      #145: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.loggingConn.Write
+      #146: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.loggingConn.Write
+      #147: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.maxBytesReader.Close
+      #148: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.maxBytesReader.Close
+      #149: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.maxBytesReader.Read
+      #150: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.maxBytesReader.Read
+      #151: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.onceCloseListener.Close
+      #152: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.onceCloseListener.Close
+      #153: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConn.Read
+      #154: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConn.Read
+      #155: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConnWriter.ReadFrom
+      #156: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConnWriter.ReadFrom
+      #157: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.persistConnWriter.Write
+      #158: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.persistConnWriter.Write
+      #159: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.readTrackingBody.Close
+      #160: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.readTrackingBody.Close
+      #161: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readTrackingBody.Read
+      #162: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readTrackingBody.Read
+      #163: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.readWriteCloserBody.CloseWrite
+      #164: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.readWriteCloserBody.CloseWrite
+      #165: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readWriteCloserBody.Read
+      #166: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readWriteCloserBody.Read
+      #167: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.response.Flush
+      #168: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.response.Flush
+      #169: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.FlushError
+      #170: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.FlushError
+      #171: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.Hijack
+      #172: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.Hijack
+      #173: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.response.ReadFrom
+      #174: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.response.ReadFrom
+      #175: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.response.Write
+      #176: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.response.Write
+      #177: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.WriteHeader
+      #178: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.WriteHeader
+      #179: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.response.WriteString
+      #180: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.response.WriteString
+      #181: internal/engine/engine.go:292:83: engine.Run calls http.transportReadFromServerError.Error
+      #182: internal/engine/engine.go:292:83: engine.Run calls http.transportReadFromServerError.Error
+
+Vulnerability #9: GO-2026-6610
+    HTTP/2 transport accepts malformed framing-related headers in net/http
+  More info: https://pkg.go.dev/vuln/GO-2026-6610
+  Module: golang.org/x/net
+    Found in: golang.org/x/net@v0.57.0
+    Fixed in: golang.org/x/net@v0.60.0
+    Example traces found:
+      #1: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.Transport.NewClientConn
+      #2: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.Transport.RoundTrip
+      #3: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.noDialH2RoundTripper.NewClientConn
+      #4: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.noDialH2RoundTripper.RoundTrip
+      #5: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.unencryptedTransport.RoundTrip
+
+  Standard library
+    Found in: net/http@go1.26.5
+    Fixed in: net/http@go1.26.9
+    Example traces found:
+      #1: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Client.CloseIdleConnections
+      #2: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Client.CloseIdleConnections
+      #3: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do
+      #4: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do
+      #5: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Get
+      #6: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Get
+      #7: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Post
+      #8: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Post
+      #9: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.Transport.CloseIdleConnections
+      #10: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.Transport.CloseIdleConnections
+      #11: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Transport.RoundTrip
+      #12: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Transport.RoundTrip
+
+Vulnerability #10: GO-2026-6609
+    Lack of limit on size of parsed Range headers in net/http
+  More info: https://pkg.go.dev/vuln/GO-2026-6609
+  Standard library
+    Found in: net/http@go1.26.5
+    Fixed in: net/http@go1.26.9
+    Example traces found:
+      #1: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.fileHandler.ServeHTTP
+
+Vulnerability #11: GO-2026-6608
+    Memory limit bypass when parsing MIME headers in net/textproto,
+    mime/multipart
+  More info: https://pkg.go.dev/vuln/GO-2026-6608
+  Standard library
+    Found in: net/textproto@go1.26.5
+    Fixed in: net/textproto@go1.26.9
+    Example traces found:
+      #1: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls multipart.Reader.ReadForm
+      #2: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which eventually calls textproto.Reader.ReadMIMEHeader
+
+Vulnerability #12: GO-2026-6607
+    Reject malformed ECH outer extension references in crypto/tls
+  More info: https://pkg.go.dev/vuln/GO-2026-6607
+  Standard library
+    Found in: crypto/tls@go1.26.5
+    Fixed in: crypto/tls@go1.26.9
+    Example traces found:
+      #1: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls tls.Conn.HandshakeContext
+      #2: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls tls.Conn.Read
+      #3: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls tls.Conn.Write
+      #4: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls tls.Dialer.DialContext
+
+Vulnerability #13: GO-2026-6605
+    HTTP/1 client connection desynchronization after CONNECT rejection in
+    net/http
+  More info: https://pkg.go.dev/vuln/GO-2026-6605
+  Standard library
+    Found in: net/http@go1.26.5
+    Fixed in: net/http@go1.26.9
+    Example traces found:
+      #1: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Client.CloseIdleConnections
+      #2: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do
+      #3: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Get
+      #4: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Post
+      #5: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.Transport.CloseIdleConnections
+      #6: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Transport.RoundTrip
+
+Vulnerability #14: GO-2026-6603
+    HTTP/2 server memory exhaustion due to Trailer headers in net/http
+  More info: https://pkg.go.dev/vuln/GO-2026-6603
+  Module: golang.org/x/net
+    Found in: golang.org/x/net@v0.57.0
+    Fixed in: golang.org/x/net@v0.60.0
+    Example traces found:
+      #1: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http2.ClientConn.Close
+      #2: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.ConfigureTransports
+      #3: internal/engine/engine.go:292:83: engine.Run calls http2.ConnectionError.Error
+      #4: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.ErrCode.String
+      #5: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.FrameHeader.String
+      #6: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.FrameType.String
+      #7: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.FrameWriteRequest.String
+      #8: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.ReadFrame
+      #9: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.ReadFrameForHeader
+      #10: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.ReadFrameHeader
+      #11: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteContinuation
+      #12: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteGoAway
+      #13: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteHeaders
+      #14: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WritePing
+      #15: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteRSTStream
+      #16: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteSettings
+      #17: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteSettingsAck
+      #18: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Framer.WriteWindowUpdate
+      #19: internal/engine/engine.go:292:83: engine.Run calls http2.GoAwayError.Error
+      #20: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.Server.ServeConn
+      #21: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.Setting.String
+      #22: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.SettingID.String
+      #23: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.SettingsFrame.ForeachSetting
+      #24: internal/engine/engine.go:292:83: engine.Run calls http2.StreamError.Error
+      #25: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http2.Transport.CloseIdleConnections
+      #26: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.Transport.NewClientConn
+      #27: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.Transport.RoundTrip
+      #28: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http2.bufferedWriterTimeoutWriter.Write
+      #29: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http2.chunkWriter.Write
+      #30: internal/engine/engine.go:292:83: engine.Run calls http2.connError.Error
+      #31: internal/engine/engine.go:292:83: engine.Run calls http2.duplicatePseudoHeaderError.Error
+      #32: internal/provider/warp.go:67:2: provider.RegisterWARP calls http2.gzipReader.Close
+      #33: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http2.gzipReader.Read
+      #34: internal/engine/engine.go:292:83: engine.Run calls http2.headerFieldNameError.Error
+      #35: internal/engine/engine.go:292:83: engine.Run calls http2.headerFieldValueError.Error
+      #36: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.netHTTPClientConn.RoundTrip
+      #37: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.noDialH2RoundTripper.NewClientConn
+      #38: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.noDialH2RoundTripper.RoundTrip
+      #39: internal/engine/engine.go:292:83: engine.Run calls http2.pseudoHeaderError.Error
+      #40: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http2.requestBody.Close
+      #41: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http2.requestBody.Read
+      #42: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http2.responseWriter.Flush
+      #43: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.responseWriter.FlushError
+      #44: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.responseWriter.SetWriteDeadline
+      #45: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http2.responseWriter.Write
+      #46: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http2.responseWriter.WriteHeader
+      #47: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which eventually calls http2.responseWriter.WriteString
+      #48: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http2.stickyErrWriter.Write
+      #49: internal/provider/warp.go:67:2: provider.RegisterWARP calls http2.transportResponseBody.Close
+      #50: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http2.transportResponseBody.Read
+      #51: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls http2.unencryptedTransport.RoundTrip
+      #52: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http2.writeData.String
+
+  Standard library
+    Found in: net/http@go1.26.5
+    Fixed in: net/http@go1.26.9
+    Example traces found:
+      #1: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.CanonicalHeaderKey
+      #2: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.CanonicalHeaderKey
+      #3: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Client.CloseIdleConnections
+      #4: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Client.CloseIdleConnections
+      #5: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do
+      #6: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do
+      #7: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Get
+      #8: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Get
+      #9: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Post
+      #10: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Post
+      #11: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Error
+      #12: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Error
+      #13: internal/engine/engine.go:16:2: engine.init calls sing.init, which eventually calls http.HandleFunc
+      #14: internal/engine/engine.go:16:2: engine.init calls sing.init, which eventually calls http.HandleFunc
+      #15: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.HandlerFunc.ServeHTTP
+      #16: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.HandlerFunc.ServeHTTP
+      #17: internal/engine/engine.go:145:19: engine.newBox calls sing.New, which eventually calls http.Header.Add
+      #18: internal/engine/engine.go:145:19: engine.newBox calls sing.New, which eventually calls http.Header.Add
+      #19: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Del
+      #20: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Del
+      #21: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Get
+      #22: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Header.Get
+      #23: internal/provider/warp.go:49:16: provider.RegisterWARP calls http.Header.Set
+      #24: internal/provider/warp.go:49:16: provider.RegisterWARP calls http.Header.Set
+      #25: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.Header.Write
+      #26: cmd/aurasplit/commands.go:271:15: aurasplit.cmdService calls fmt.Fprintln, which eventually calls http.Header.Write
+      #27: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.NewRequest
+      #28: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.NewRequest
+      #29: internal/provider/warp.go:45:40: provider.RegisterWARP calls http.NewRequestWithContext
+      #30: internal/provider/warp.go:45:40: provider.RegisterWARP calls http.NewRequestWithContext
+      #31: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ReadResponse
+      #32: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ReadResponse
+      #33: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Request.Write
+      #34: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Request.Write
+      #35: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Response.Write
+      #36: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Response.Write
+      #37: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ResponseController.Hijack
+      #38: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ResponseController.Hijack
+      #39: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ServeMux.ServeHTTP
+      #40: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.ServeMux.ServeHTTP
+      #41: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.Server.Close
+      #42: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.Server.Close
+      #43: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Server.Serve
+      #44: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Server.Serve
+      #45: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Transport.Clone
+      #46: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Transport.Clone
+      #47: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.Transport.CloseIdleConnections
+      #48: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.Transport.CloseIdleConnections
+      #49: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Transport.RoundTrip
+      #50: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Transport.RoundTrip
+      #51: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.body.Close
+      #52: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.body.Close
+      #53: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.body.Read
+      #54: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.body.Read
+      #55: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.bodyEOFSignal.Close
+      #56: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.bodyEOFSignal.Close
+      #57: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.bodyEOFSignal.Read
+      #58: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.bodyEOFSignal.Read
+      #59: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bodyLocked.Read
+      #60: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bodyLocked.Read
+      #61: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bufioFlushWriter.Write
+      #62: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.bufioFlushWriter.Write
+      #63: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.cancelTimerBody.Close
+      #64: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.cancelTimerBody.Close
+      #65: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.cancelTimerBody.Read
+      #66: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.cancelTimerBody.Read
+      #67: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.checkConnErrorWriter.Write
+      #68: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.checkConnErrorWriter.Write
+      #69: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.chunkWriter.Write
+      #70: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.chunkWriter.Write
+      #71: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.connReader.Read
+      #72: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.connReader.Read
+      #73: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.expectContinueReader.Close
+      #74: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.expectContinueReader.Close
+      #75: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.expectContinueReader.Read
+      #76: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.expectContinueReader.Read
+      #77: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.gzipReader.Close
+      #78: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.gzipReader.Close
+      #79: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.gzipReader.Read
+      #80: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.gzipReader.Read
+      #81: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.http2ClientConn.Close
+      #82: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.http2ClientConn.Close
+      #83: internal/engine/engine.go:292:83: engine.Run calls http.http2ConnectionError.Error
+      #84: internal/engine/engine.go:292:83: engine.Run calls http.http2ConnectionError.Error
+      #85: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2ErrCode.String
+      #86: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2ErrCode.String
+      #87: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameHeader.String
+      #88: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameHeader.String
+      #89: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameType.String
+      #90: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameType.String
+      #91: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameWriteRequest.String
+      #92: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2FrameWriteRequest.String
+      #93: internal/engine/engine.go:292:83: engine.Run calls http.http2GoAwayError.Error
+      #94: internal/engine/engine.go:292:83: engine.Run calls http.http2GoAwayError.Error
+      #95: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2Setting.String
+      #96: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2Setting.String
+      #97: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2SettingID.String
+      #98: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2SettingID.String
+      #99: internal/engine/engine.go:292:83: engine.Run calls http.http2StreamError.Error
+      #100: internal/engine/engine.go:292:83: engine.Run calls http.http2StreamError.Error
+      #101: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2bufferedWriterTimeoutWriter.Write
+      #102: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2bufferedWriterTimeoutWriter.Write
+      #103: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2chunkWriter.Write
+      #104: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2chunkWriter.Write
+      #105: internal/engine/engine.go:292:83: engine.Run calls http.http2connError.Error
+      #106: internal/engine/engine.go:292:83: engine.Run calls http.http2connError.Error
+      #107: internal/engine/engine.go:292:83: engine.Run calls http.http2duplicatePseudoHeaderError.Error
+      #108: internal/engine/engine.go:292:83: engine.Run calls http.http2duplicatePseudoHeaderError.Error
+      #109: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.http2gzipReader.Close
+      #110: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.http2gzipReader.Close
+      #111: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2gzipReader.Read
+      #112: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2gzipReader.Read
+      #113: internal/engine/engine.go:292:83: engine.Run calls http.http2headerFieldNameError.Error
+      #114: internal/engine/engine.go:292:83: engine.Run calls http.http2headerFieldNameError.Error
+      #115: internal/engine/engine.go:292:83: engine.Run calls http.http2headerFieldValueError.Error
+      #116: internal/engine/engine.go:292:83: engine.Run calls http.http2headerFieldValueError.Error
+      #117: internal/engine/engine.go:292:83: engine.Run calls http.http2pseudoHeaderError.Error
+      #118: internal/engine/engine.go:292:83: engine.Run calls http.http2pseudoHeaderError.Error
+      #119: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.http2requestBody.Close
+      #120: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.http2requestBody.Close
+      #121: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2requestBody.Read
+      #122: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2requestBody.Read
+      #123: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2responseWriter.Flush
+      #124: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2responseWriter.Flush
+      #125: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.http2responseWriter.FlushError
+      #126: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.http2responseWriter.FlushError
+      #127: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.http2responseWriter.Write
+      #128: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.http2responseWriter.Write
+      #129: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.http2responseWriter.WriteHeader
+      #130: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.http2responseWriter.WriteHeader
+      #131: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.http2responseWriter.WriteString
+      #132: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.http2responseWriter.WriteString
+      #133: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2stickyErrWriter.Write
+      #134: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.http2stickyErrWriter.Write
+      #135: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.http2transportResponseBody.Close
+      #136: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.http2transportResponseBody.Close
+      #137: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2transportResponseBody.Read
+      #138: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.http2transportResponseBody.Read
+      #139: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2writeData.String
+      #140: internal/engine/engine.go:292:83: engine.Run calls sing.ServerConnError.Error, which eventually calls http.http2writeData.String
+      #141: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.loggingConn.Close
+      #142: internal/provider/warp.go:67:2: provider.RegisterWARP calls http.loggingConn.Close
+      #143: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.loggingConn.Read
+      #144: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.loggingConn.Read
+      #145: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.loggingConn.Write
+      #146: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.loggingConn.Write
+      #147: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.maxBytesReader.Close
+      #148: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.maxBytesReader.Close
+      #149: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.maxBytesReader.Read
+      #150: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.maxBytesReader.Read
+      #151: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.onceCloseListener.Close
+      #152: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.onceCloseListener.Close
+      #153: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConn.Read
+      #154: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConn.Read
+      #155: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConnWriter.ReadFrom
+      #156: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.persistConnWriter.ReadFrom
+      #157: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.persistConnWriter.Write
+      #158: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.persistConnWriter.Write
+      #159: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.readTrackingBody.Close
+      #160: internal/provider/warp.go:67:2: provider.RegisterWARP calls sing.rawServerConn.Close, which eventually calls http.readTrackingBody.Close
+      #161: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readTrackingBody.Read
+      #162: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readTrackingBody.Read
+      #163: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.readWriteCloserBody.CloseWrite
+      #164: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.readWriteCloserBody.CloseWrite
+      #165: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readWriteCloserBody.Read
+      #166: internal/provider/warp.go:75:25: provider.RegisterWARP calls io.ReadAll, which calls http.readWriteCloserBody.Read
+      #167: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.response.Flush
+      #168: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.response.Flush
+      #169: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.FlushError
+      #170: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.FlushError
+      #171: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.Hijack
+      #172: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.Hijack
+      #173: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.response.ReadFrom
+      #174: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls http.response.ReadFrom
+      #175: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.response.Write
+      #176: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls http.response.Write
+      #177: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.WriteHeader
+      #178: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.response.WriteHeader
+      #179: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.response.WriteString
+      #180: internal/engine/engine.go:292:83: engine.Run calls multierr.multiError.Error, which eventually calls http.response.WriteString
+      #181: internal/engine/engine.go:292:83: engine.Run calls http.transportReadFromServerError.Error
+      #182: internal/engine/engine.go:292:83: engine.Run calls http.transportReadFromServerError.Error
+
+Vulnerability #15: GO-2026-6600
+    Recognize yield as regexp preceder keyword in html/template
+  More info: https://pkg.go.dev/vuln/GO-2026-6600
+  Standard library
+    Found in: html/template@go1.26.5
+    Fixed in: html/template@go1.26.9
+    Example traces found:
+      #1: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls template.Template.Execute
+      #2: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls template.Template.ExecuteTemplate
+
+Vulnerability #16: GO-2026-6599
+    Reset context tracking on consecutive template expressions in html/template
+  More info: https://pkg.go.dev/vuln/GO-2026-6599
+  Standard library
+    Found in: html/template@go1.26.5
+    Fixed in: html/template@go1.26.9
+    Example traces found:
+      #1: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls template.Template.Execute
+      #2: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls template.Template.ExecuteTemplate
+
+Vulnerability #17: GO-2026-6355
+    Prevent DoS on deadlocked established channel in golang.org/x/crypto/ssh
+  More info: https://pkg.go.dev/vuln/GO-2026-6355
+  Module: golang.org/x/crypto
+    Found in: golang.org/x/crypto@v0.54.0
+    Fixed in: golang.org/x/crypto@v0.56.0
+    Example traces found:
+      #1: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls ssh.NewClientConn
+
+Vulnerability #18: GO-2026-6354
+    Prevent DoS on deadlocked undecided channel in golang.org/x/crypto/ssh
+  More info: https://pkg.go.dev/vuln/GO-2026-6354
+  Module: golang.org/x/crypto
+    Found in: golang.org/x/crypto@v0.54.0
+    Fixed in: golang.org/x/crypto@v0.56.0
+    Example traces found:
+      #1: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls ssh.NewClientConn
+
+Vulnerability #19: GO-2026-6348
+    Heap Memory Exhaustion (OOM) via HTTP/2 DATA Frame Fragmentation in
+    google.golang.org/grpc
+  More info: https://pkg.go.dev/vuln/GO-2026-6348
+  Module: google.golang.org/grpc
+    Found in: google.golang.org/grpc@v1.79.1
+    Fixed in: google.golang.org/grpc@v1.83.1
+    Example traces found:
+      #1: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls mem.BufferSlice.MaterializeToBuffer
+      #2: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls mem.IsBelowBufferPoolingThreshold
+      #3: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls mem.NewBuffer
+      #4: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls mem.ReadAll
+      #5: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls transport.ClientStream.Close
+      #6: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls transport.ClientStream.Read
+      #7: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls transport.ClientStream.RecvCompress
+      #8: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls transport.NewHTTP2Client
+      #9: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls transport.ServerStream.Read
+      #10: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls transport.Stream.ReadMessageHeader
+      #11: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls transport.http2Client.Close
+      #12: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls transport.http2Client.NewStream
+      #13: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls transport.serverHandlerTransport.HandleStreams
+
+Vulnerability #20: GO-2026-6218
+    Avoid quadratic complexity in resolvePath in net/url
+  More info: https://pkg.go.dev/vuln/GO-2026-6218
+  Standard library
+    Found in: net/url@go1.26.5
+    Fixed in: net/url@go1.26.6
+    Example traces found:
+      #1: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls url.URL.Parse
+
+Vulnerability #21: GO-2026-6091
+    Fix Javascript regexp context tracking in html/template
+  More info: https://pkg.go.dev/vuln/GO-2026-6091
+  Standard library
+    Found in: html/template@go1.26.5
+    Fixed in: html/template@go1.26.6
+    Example traces found:
+      #1: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls template.Template.Execute
+      #2: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls template.Template.ExecuteTemplate
+
+Vulnerability #22: GO-2026-6090
+    Limit handshake messages we are willing to accept post-handshake in
+    crypto/tls
+  More info: https://pkg.go.dev/vuln/GO-2026-6090
+  Standard library
+    Found in: crypto/tls@go1.26.5
+    Fixed in: crypto/tls@go1.26.6
+    Example traces found:
+      #1: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls tls.Conn.HandshakeContext
+      #2: internal/paths/secure_windows.go:942:22: paths.CopyToInstallDir calls io.Copy, which eventually calls tls.Conn.Read
+      #3: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which calls tls.Conn.Write
+      #4: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do, which eventually calls tls.Dialer.DialContext
+
+Vulnerability #23: GO-2026-6089
+    Apply ReadHeaderTimeout when doing unencrypted HTTP/2 check in net/http
+  More info: https://pkg.go.dev/vuln/GO-2026-6089
+  Standard library
+    Found in: net/http@go1.26.5
+    Fixed in: net/http@go1.26.6
+    Example traces found:
+      #1: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Server.Serve
+
+Vulnerability #24: GO-2026-6061
+    Vulnerabilities in the xDS RBAC authorization engine and the HTTP/2
+    transport server implementation in google.golang.org/grpc
+  More info: https://pkg.go.dev/vuln/GO-2026-6061
+  Module: google.golang.org/grpc
+    Found in: google.golang.org/grpc@v1.79.1
+    Fixed in: google.golang.org/grpc@v1.82.1
+    Example traces found:
+      #1: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls transport.ClientStream.Close
+      #2: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls transport.ClientStream.Read
+      #3: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls transport.ClientStream.RecvCompress
+      #4: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls transport.ClientStream.Write
+      #5: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls transport.NewHTTP2Client
+      #6: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls transport.ServerStream.Read
+      #7: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls transport.ServerStream.Write
+      #8: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls transport.ServerStream.WriteStatus
+      #9: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls transport.Stream.ReadMessageHeader
+      #10: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls transport.http2Client.Close
+      #11: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls transport.http2Client.NewStream
+
+Vulnerability #25: GO-2026-5972
+    Enforce maximum recursion depth in encoding/asn1
+  More info: https://pkg.go.dev/vuln/GO-2026-5972
+  Standard library
+    Found in: encoding/asn1@go1.26.5
+    Fixed in: encoding/asn1@go1.26.6
+    Example traces found:
+      #1: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls asn1.Unmarshal
+
+Vulnerability #26: GO-2026-5026
+    Invoking failure to reject ASCII-only Punycode-encoded labels in
+    golang.org/x/net/idna
+  More info: https://pkg.go.dev/vuln/GO-2026-5026
+  Standard library
+    Found in: net/http@go1.26.5
+    Fixed in: net/http@go1.26.6
+    Example traces found:
+      #1: internal/engine/engine.go:165:16: engine.Check calls sing.Box.Close, which eventually calls http.Client.CloseIdleConnections
+      #2: internal/provider/warp.go:60:28: provider.RegisterWARP calls http.Client.Do
+      #3: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Get
+      #4: cmd/aurasplit/main.go:75:14: aurasplit.main calls fmt.Fprintf, which eventually calls http.Client.Post
+      #5: internal/service/service_windows.go:289:16: service.RunService calls svc.Run, which eventually calls http.Transport.CloseIdleConnections
+      #6: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls http.Transport.RoundTrip
+
+Vulnerability #27: GO-2026-4762
+    Authorization bypass in gRPC-Go via missing leading slash in :path in
+    google.golang.org/grpc
+  More info: https://pkg.go.dev/vuln/GO-2026-4762
+  Module: google.golang.org/grpc
+    Found in: google.golang.org/grpc@v1.79.1
+    Fixed in: google.golang.org/grpc@v1.79.3
+    Example traces found:
+      #1: internal/engine/engine.go:119:23: engine.instance.Start calls sing.Box.Start, which eventually calls grpc.Server.ServeHTTP
+
+Your code is affected by 27 vulnerabilities from 4 modules and the Go standard library.
+This scan also found 5 vulnerabilities in packages you import and 10
+vulnerabilities in modules you require, but your code doesn't appear to call
+these vulnerabilities.
+Use '-show verbose' for more details.
+exit status 3

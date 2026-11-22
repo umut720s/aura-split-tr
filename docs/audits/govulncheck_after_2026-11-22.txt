@@ -1,0 +1,36 @@
+# govulncheck after dependency bump - 2026-11-22
+# command: go run golang.org/x/vuln/cmd/govulncheck@latest -tags with_gvisor,with_wireguard,with_external_windivert ./...
+# toolchain: go1.26.11
+# baseline (2026-11-21, docs/audits/govulncheck_baseline_2026-11-21.txt): 27 affecting code / 5 in imported packages not called / 10 in required modules not called
+# after: see below
+
+=== Symbol Results ===
+
+No vulnerabilities found.
+
+Your code is affected by 0 vulnerabilities.
+This scan also found 0 vulnerabilities in packages you import and 1
+vulnerability in modules you require, but your code doesn't appear to call these
+vulnerabilities.
+Use '-show verbose' for more details.
+exit status 0
+
+=== -show verbose: remaining informational findings (not called) ===
+=== Package Results ===
+
+No other vulnerabilities found.
+
+=== Module Results ===
+
+Vulnerability #1: GO-2026-5932
+    The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design,
+    and has known security issues
+  More info: https://pkg.go.dev/vuln/GO-2026-5932
+  Module: golang.org/x/crypto
+    Found in: golang.org/x/crypto@v0.58.0
+    Fixed in: golang.org/x/crypto@v0.58.1-0.20261009181718-2f1f834330b2
+
+Your code is affected by 0 vulnerabilities.
+This scan also found 0 vulnerabilities in packages you import and 1
+vulnerability in modules you require, but your code doesn't appear to call these
+vulnerabilities.

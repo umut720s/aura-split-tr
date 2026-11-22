@@ -1,0 +1,117 @@
+AURA Split TR - FAZ 3 ARA DURUM RAPORU
+Tarih: 2026-11-22
+Durum: Faz 3 devam ediyor (bu rapor "ne olur ne olmaz" yedeği; nihai rapor değil)
+
+======================================================================
+1. OZET
+======================================================================
+- Uygulama derleniyor, birim testleri geciyor (yonetici gerektirmeyenler).
+- Gercek kurulum, Windows hizmeti, TUN tuneli, WFP fail-closed ve gercek
+  VPN baglantisi HIC denenmedi (yonetici yetkisi + kullanici onayi gerekli).
+- GitHub yayina hazirlik durumu: BLOCKED (gercek ag dogrulamasi yok).
+- Uretime hazir DEGIL.
+
+======================================================================
+2. FAZ 3'TE YAPILANLAR
+======================================================================
+Denetimler (docs/audits/):
+- phase3_architecture.md  : Gercek trafik yolu, sizinti analizi, tarayici
+                            izolasyonu, fail-closed tasarimi (Agent A)
+- phase3_security.md      : Guvenlik denetimi; Critical/High yok (Agent B)
+- phase3_reliability.md   : Test kapsami, "Dizin bos degil" hatasinin
+                            sebebi (antivirus, sizinti degil) (Agent C)
+- phase3_release.md       : Lisans uyumu, yayin hazirligi (Agent D)
+- phase3_codex_review_round1.md / round2.md : Codex (gpt-6.1-sol) bagimsiz
+                            incelemeleri (gercekten calisti)
+- govulncheck_baseline_2026-11-21.txt / govulncheck_after_2026-11-22.txt
+
+Kod degisiklikleri:
+- Kalici WFP fail-closed katmani (internal/wfp): Discord exe'leri tunel
+  disinda engellenir; tunel calisirken yalnizca TUN uzerinden izin verilir.
+- Yeni komutlar: disable (korumayi kaldirir), recover (acil kurtarma).
+- Durum gostergeleri: SERVICE_RUNNING, TUNNEL_INITIALIZED,
+  VPN_CONNECTIVITY_VERIFIED, VPN_DEGRADED, VPN_DISCONNECTED,
+  PROTECTION_ACTIVE. Baglanti testi yalnizca tunel icinden yapilir.
+- Go 1.26.11'e ve guvenli modul surumlerine gecildi.
+- WinDivert surucusu exe'den cikarildi (with_external_windivert).
+- Urun adi kullaniciya "AURA Split TR" olarak gosteriliyor.
+- Codex round-1'in 8 bulgusu duzeltildi (7 tam, 1 kismi).
+
+Yayin / uyum dosyalari:
+- LICENSE (tam GPL-3.0), NOTICE, THIRD_PARTY_LICENSES.md, TRADEMARKS.md,
+  CONTRIBUTING.md, SECURITY.md, .gitignore, docs/BUILD.md,
+  docs/RELEASE_NOTES_v0.1.0-beta.md
+- .github/workflows/ci.yml (derleme, test, vet, staticcheck, govulncheck)
+- .github/workflows/release.yml (yalnizca elle tetiklenir, sadece TASLAK
+  release olusturur, otomatik yayin YOK, Authenticode imzasi YOK)
+
+Test plani:
+- docs/testing/phase3_realworld_test_plan.md : 15 senaryo, kurtarma ve
+  geri alma adimlari, sizinti ve performans olcum yontemleri.
+  Tum sonuclar "NOT TESTED".
+
+======================================================================
+3. TEST DURUMU
+======================================================================
+go vet                          : PASS
+go test (varsayilan etiketler)  : PASS (tum paketler)
+go test -tags acltests          : BLOCKED (yonetici gerekli; 1 test yetki
+                                  hatasiyla duser)
+go test -race                   : BLOCKED (gcc / cgo yok)
+govulncheck                     : PASS (cagrilan kodda 0 acik; once 27)
+build.ps1                       : PASS
+Kisisel veri taramasi           : PASS (exe ve kaynakta kullanici adi yok;
+                                  ucuncu taraf yazar e-postalari lisans
+                                  geregi THIRD_PARTY_LICENSES.md icinde)
+Gercek WFP / hizmet / TUN / VPN : NOT TESTED
+Performans olcumleri            : NOT TESTED
+
+======================================================================
+4. SU AN SUREN IS
+======================================================================
+Codex round-2'nin buldugu yeni sorunlar duzeltiliyor:
+- (High)   Devre disi WFP filtresi aktif koruma sayilabiliyor
+- (Medium) Kismi izin yenilemesi calisan izinleri kaldirabiliyor
+- (Medium) Basarisiz dizin izleme tekrar denenmiyor
+- (Medium) Filtre sayisi sinirsiz buyuyebiliyor
+- (Low)    Baglanti testi DNS yanit dogrulamasi zayif
+- README'deki kosulsuz fail-closed vaadi daraltiliyor
+Sonra: Codex round-3 kontrolu, ardindan nihai rapor
+(docs/reports/PHASE3_FINAL_REPORT.md).
+Bu islerin bitip bitmedigi bu dosyada YAZMAZ; klasoru kontrol et.
+
+======================================================================
+5. BILINEN SINIRLAR / KALAN RISKLER
+======================================================================
+- Fail-closed yalnizca KESFEDILEN Discord exe'lerini kapsar. Tunel
+  kapaliyken yeni bir Discord surumu ~1 sn icinde ag acabilir.
+- Hizmet kapaliyken Windows DNS istemcisi Discord adlarini ISS'e sorabilir
+  (baglanti engellenir, ama ad sorgusu sizar).
+- Tarayicidaki Discord WFP ile korunmaz; alan adi kurallarina dayanir.
+  ECH, paylasilan CDN IP'leri gibi durumlarda tam ayrim garanti edilemez.
+- Exe silinirse "uninstall" yapilmadan, Discord engelli kalir; cozum:
+  ayni surumu indirip "aurasplit recover".
+- Wintun surucusunun lisansi acik kaynak degil; kullanim sartlara uyuyor
+  gibi ama hukuki goz atilmasi onerilir.
+- Exe imzasiz; antivirusler (or. Kaspersky) yanlis alarm verebilir.
+
+======================================================================
+6. KULLANICININ YAPMASI GEREKENLER
+======================================================================
+1. Yer tutuculari doldur: telif sahibi adi, <OWNER>/<REPO>,
+   <security-contact>.
+2. Wintun lisansi icin karar ver (gerekirse hukuki gorus).
+3. Gercek testi bir sanal makinede (Hyper-V + geri donus noktasi),
+   docs/testing/phase3_realworld_test_plan.md adimlariyla yap ya da
+   bana acik onay ver.
+4. Yayinlamadan once exe'yi Authenticode ile imzalamayi dusun.
+5. GitHub'a yukleme / release: henuz YAPILMADI, acik onay olmadan
+   yapilmayacak.
+
+======================================================================
+7. ACIL KURTARMA (gercek test sonrasi Discord engelli kalirsa)
+======================================================================
+Yonetici PowerShell'de:
+  aurasplit.exe recover      (WFP kurallarini siler, hizmeti durdurur)
+  aurasplit.exe uninstall    (tamamen kaldirir)
+Ayrintili kademeli kurtarma: docs/testing/phase3_realworld_test_plan.md §2

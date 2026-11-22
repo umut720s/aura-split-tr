@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SPDX-License-Identifier: GPL-3.0-or-later
+
+  AURA Split TR - Windows Installer package (WiX Toolset v5).
+
+  Windows Installer, not aurasplit.exe, owns the installation: it creates
+  %ProgramFiles%\AuraSplitTR, copies aurasplit.exe, registers the AuraSplitTR
+  service (manual start, LocalSystem, depends on BFE) and the event log
+  source, and removes all of it on uninstall. aurasplit.exe never copies
+  itself or creates the service any more.
+
+  Uninstall order (full uninstall only, not the removal of an old version
+  during an upgrade): `recover` (msi flag) removes the persistent WFP policy
+  (must succeed, or the uninstall rolls back and keeps aurasplit.exe, the
+  recovery tool); at commit a packaged `uninstall` (msi flag) removes only AURA Split TR's own files
+  from %ProgramData%\AuraSplitTR through no-follow handles (an untrusted or
+  unexpected directory is left for manual inspection); then the service and
+  the program files are removed. The installer itself never deletes
+  anything under %ProgramData% by path.
+
+  The service is registered with Start="demand": an unconfigured service must
+  never start at boot and block Discord. `aurasplit.exe setup` (Start Menu:
+  "AURA Split TR - Yapılandır") writes the profile, applies the WFP policy and
+  switches the service to automatic start.
+
+  Build (see build.ps1 / docs/BUILD.md):
+    wix build -arch x64 -ext WixToolset.Util.wixext -d Version=0.1.0
+      -d BinDir=dist -o dist\AuraSplitTR-0.1.0-x64.msi installer\AuraSplitTR.wxs
+
+  Preprocessor variables:
+    Version  MSI product version, major.minor.build (required)
+    BinDir   folder that contains aurasplit.exe (default: ..\dist)
+    DocDir   folder that contains LICENSE / NOTICE / THIRD_PARTY_LICENSES.md
+             (default: ..)
+-->
+<?ifndef Version?>
+<?error Pass the product version: wix build -d Version=major.minor.build ?>
+<?endif?>
+<?ifndef BinDir?>
+<?define BinDir = ..\dist ?>
+<?endif?>
+<?ifndef DocDir?>
+<?define DocDir = .. ?>
+<?endif?>
+
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <!--
+    UpgradeCode is fixed for the lifetime of the product: never change it,
+    or upgrades will install side by side. ProductCode and PackageCode are
+    generated per build. Codepage 1254 (Turkish) covers the Turkish strings
+    below.
+  -->
+  <Package Name="AURA Split TR"
+           Manufacturer="AURA Split TR contributors"
+           Version="$(Version)"
+           UpgradeCode="3722A804-04C6-4115-AE01-641B4549159E"
+           Scope="perMachine"
+           Language="1055"
+           Codepage="1254"
+           InstallerVersion="500"
+           Compressed="yes">
+
+    <SummaryInformation Description="AURA Split TR $(Version) (x64)"
+                        Manufacturer="AURA Split TR contributors"
+                        Codepage="1254" />
+
+    <!--
+      Same-version packages replace each other (0.1.0-beta and 0.1.0 share the
+      MSI version 0.1.0). Schedule="afterInstallInitialize": the previous
+      product is removed INSIDE this installation's transaction, so if the
+      new installation fails afterwards, Windows Installer rolls back both
+      and the old product's files, service registration and start type come
+      back (with the default afterInstallValidate the old product would
+      already be gone for good). The old product's uninstall runs with
+      UPGRADINGPRODUCTCODE set, so neither the recover action nor the data
+      cleanup runs during an upgrade: the profile and the persistent WFP
+      policy stay, and AuraResume restarts a configured service once the
+      transaction has committed.
+    -->
+    <MajorUpgrade Schedule="afterInstallInitialize"
+                  AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="Daha yeni bir AURA Split TR sürümü zaten kurulu. Bu eski sürüm kurulamaz; önce yeni sürümü Ayarlar &gt; Uygulamalar bölümünden kaldırın." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- 64-bit Windows only. Elevation is handled by Windows Installer (per-machine package). -->
+    <Launch Condition="VersionNT64" Message="AURA Split TR yalnızca 64 bit Windows 10/11 üzerinde çalışır." />
+
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Icon Id="AuraIcon" SourceFile="$(DocDir)\assets\aura.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AuraIcon" />
+    <Property Id="ARPCOMMENTS" Value="Yalnızca Discord trafiğini WireGuard tünelinden geçirir." />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="AuraSplitTR" />
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="AURA Split TR" Level="1" AllowAbsent="no">
+      <ComponentRef Id="InstallFolderAcl" />
+      <ComponentRef Id="MainExecutable" />
+      <ComponentGroupRef Id="Docs" />
+    </Feature>
+
+    <!--
+      The install folder gets the same protected descriptor the CLI expects
+      (paths.InstallSDDL: owner Administrators; SYSTEM and Administrators
+      full control; Users read and execute; nothing inherited). Files
+      installed into it inherit this DACL. `setup` refuses to configure the
+      service if the folder or aurasplit.exe is writable by anyone else.
+      internal/paths has a test that keeps this string and InstallSDDL equal.
+    -->
+    <Component Id="InstallFolderAcl" Directory="INSTALLFOLDER" Guid="0E5B2F7A-9C41-4D3E-8B6A-5F2C7D1E9A30">
+      <CreateFolder>
+        <PermissionEx Sddl="O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;BU)" />
+      </CreateFolder>
+    </Component>
+
+    <Component Id="MainExecutable" Directory="INSTALLFOLDER">
+      <!--
+        build.ps1 embeds the actual PE version, replacing older unversioned
+        copies. Early major-upgrade removal also replaces same-version files.
+      -->
+      <File Id="AuraSplitExe" Source="$(BinDir)\aurasplit.exe" Name="aurasplit.exe" KeyPath="yes"
+            DefaultLanguage="1033">
+        <!--
+          Start Menu entry (all users) that runs the configuration wizard.
+          aurasplit.exe asks for administrator rights itself (UAC,
+          ShellExecute "runas") because the wizard is interactive. It lives
+          in this per-machine component (file key path), directly in the
+          Programs folder, so no per-user key path is needed. No desktop
+          shortcut.
+        -->
+        <Shortcut Id="ConfigureShortcut"
+                  Directory="ProgramMenuFolder"
+                  Name="AURA Split TR - Yapılandır"
+                  Description="VPN sağlayıcısını seçer ve AURA Split TR hizmetini başlatır."
+                  Arguments="setup"
+                  Icon="AuraIcon"
+                  IconIndex="0"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Advertise="no" />
+      </File>
+
+      <!--
+        Command line: "<INSTALLFOLDER>aurasplit.exe" service. Windows
+        Installer quotes the path. Start="demand" on purpose (see header).
+      -->
+      <ServiceInstall Id="AuraSplitService"
+                      Name="AuraSplitTR"
+                      DisplayName="AURA Split TR (Discord tunnel)"
+                      Description="Routes only Discord (app and updater) traffic through a WireGuard tunnel."
+                      Type="ownProcess"
+                      Start="demand"
+                      ErrorControl="normal"
+                      Account="LocalSystem"
+                      Arguments="service"
+                      Vital="yes">
+        <ServiceDependency Id="BFE" />
+
+        <!-- Restart after 5 s on the first three failures; reset the count after 1 day. -->
+        <util:ServiceConfig FirstFailureActionType="restart"
+                            SecondFailureActionType="restart"
+                            ThirdFailureActionType="restart"
+                            RestartServiceDelayInSeconds="5"
+                            ResetPeriodInDays="1" />
+
+        <!--
+          The "run failure actions also on a non-zero exit code" flag
+          (SERVICE_CONFIG_FAILURE_ACTIONS_FLAG, needed for service.ErrFatal)
+          is NOT set here: util:ServiceConfig in WiX v5 has no attribute for
+          it, and the core ServiceConfig element (MsiServiceConfig) is
+          documented by the Windows Installer SDK as not working as expected
+          (WiX warning WIX1149). `setup` sets the flag through the service
+          manager API instead (service.EnableNonCrashRecovery).
+        -->
+      </ServiceInstall>
+
+      <!--
+        Stop the service before its files are replaced or removed (install
+        and uninstall) and delete it on uninstall. Never started by the
+        installer: `setup` starts it once a profile exists.
+      -->
+      <ServiceControl Id="AuraSplitServiceControl"
+                      Name="AuraSplitTR"
+                      Stop="both"
+                      Remove="uninstall"
+                      Wait="yes" />
+
+      <!--
+        Event log source used by the service (same values the former
+        eventlog.InstallAsEventCreate wrote). Removed with the component.
+      -->
+      <RegistryKey Root="HKLM" Key="SYSTEM\CurrentControlSet\Services\EventLog\Application\AuraSplitTR">
+        <RegistryValue Name="EventMessageFile" Type="expandable" Value="%SystemRoot%\System32\EventCreate.exe" />
+        <RegistryValue Name="TypesSupported" Type="integer" Value="7" />
+      </RegistryKey>
+    </Component>
+
+    <!-- License texts, installed next to the program (one file per component). -->
+    <ComponentGroup Id="Docs" Directory="INSTALLFOLDER">
+      <Component>
+        <File Id="LicenseTxt" Source="$(DocDir)\LICENSE" Name="LICENSE.txt" KeyPath="yes" />
+      </Component>
+      <Component>
+        <File Id="NoticeTxt" Source="$(DocDir)\NOTICE" Name="NOTICE.txt" KeyPath="yes" />
+      </Component>
+      <Component>
+        <File Id="ThirdPartyLicenses" Source="$(DocDir)\THIRD_PARTY_LICENSES.md" Name="THIRD_PARTY_LICENSES.md" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <!--
+      Is the installed aurasplit.exe still there? (AppSearch runs at the
+      start of every sequence.) If an antivirus quarantined or a user
+      deleted it, nothing could remove the WFP policy; the uninstall then
+      stops with AuraExeMissing instead of leaving Discord blocked without a
+      recovery tool. INSTALLFOLDER is fixed (no UI to change it), so the
+      search uses the same path. If the file disappears after this search,
+      AuraRecover itself fails and the uninstall rolls back.
+    -->
+    <Property Id="AURAEXEFOUND" Secure="yes">
+      <DirectorySearch Id="AuraInstallDirSearch" Path="[ProgramFiles64Folder]AuraSplitTR" Depth="0">
+        <FileSearch Id="AuraExeSearch" Name="aurasplit.exe" />
+      </DirectorySearch>
+    </Property>
+
+    <!--
+      CustomAction.Target is limited to 255 characters (ICE03), so the text
+      lives in a property; the Error target is formatted at run time.
+    -->
+    <Property Id="AuraExeMissingText" Value="AURA Split TR kaldırılamıyor: aurasplit.exe bulunamadı. Dosyayı geri yükleyin veya aynı sürümü yeniden kurun/onarın. Yönetici olarak &quot;aurasplit.exe recover&quot; çalıştırın, sonra kaldırmayı tekrar deneyin." />
+    <CustomAction Id="AuraExeMissing" Error="[AuraExeMissingText]" />
+
+    <CustomAction Id="AuraRollbackRequired" Error="AURA Split TR yükseltme, onarım veya kaldırma işlemi geri alma kapalıyken yapılamaz. Geri almayı etkinleştirin ve tekrar deneyin." />
+    <SetProperty Id="AuraSaveRecoverState"
+                 Value="&quot;[INSTALLFOLDER]aurasplit.exe&quot; recover --msi --save-state"
+                 Before="AuraSaveRecoverState" Sequence="execute" />
+    <CustomAction Id="AuraSaveRecoverState" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+                  DllEntry="WixQuietExec" Execute="deferred" Impersonate="no" Return="check" />
+    <SetProperty Id="AuraRecoverRollback"
+                 Value="&quot;[INSTALLFOLDER]aurasplit.exe&quot; recover-rollback --msi"
+                 Before="AuraRecoverRollback" Sequence="execute" />
+    <CustomAction Id="AuraRecoverRollback" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+                  DllEntry="WixQuietExec" Execute="rollback" Impersonate="no" Return="ignore" />
+
+    <!--
+      Uninstall step 1: remove the persistent WFP policy BEFORE the service
+      is stopped and the program file is deleted. Without aurasplit.exe
+      nothing would be left that knows the WFP provider key, and Discord
+      would stay blocked. `recover` with the msi flag never prompts and
+      returns 0 when there is nothing to remove; any failure (policy still
+      present, WFP engine unavailable, service cannot be stopped) is
+      non-zero and Return="check" makes Windows Installer roll the
+      uninstall back, so the service and aurasplit.exe stay and the user
+      can retry. WixQuietExec runs it without a console window and copies
+      its output into the MSI log.
+    -->
+    <SetProperty Id="AuraRecover"
+                 Value="&quot;[INSTALLFOLDER]aurasplit.exe&quot; recover --msi"
+                 Before="AuraRecover"
+                 Sequence="execute" />
+    <CustomAction Id="AuraRecover"
+                  BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+                  DllEntry="WixQuietExec"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="check" />
+
+    <!--
+      Uninstall commit (service and program files already removed):
+      `uninstall` (msi flag) runs recover once more (normally nothing left;
+      a failure is logged and leaves data untouched), then deletes only AURA Split TR's own
+      files in %ProgramData%\AuraSplitTR (profile.json = VPN private key,
+      tunnel-state.json, service.log*, its staging files) through handles
+      that never follow links, and the folder itself only if it is then
+      empty. A folder that is not owned/controlled by SYSTEM/Administrators,
+      or that holds anything else, is left as it is for manual inspection;
+      that does not fail the uninstall. Native EXE actions do not forward
+      stdout to the MSI log. This replaces
+      util:RemoveFolderEx, which deleted the tree by path name.
+    -->
+    <!-- Keep the profile and rollback record until commit. The installed
+         executable is already removed then, so execute the packaged copy. -->
+    <Binary Id="AuraCleanupExe" SourceFile="$(BinDir)\aurasplit.exe" />
+    <CustomAction Id="AuraCleanData" BinaryRef="AuraCleanupExe"
+                  ExeCommand="uninstall --msi" Execute="commit"
+                  Impersonate="no" Return="ignore" />
+
+    <!--
+      Upgrade or repair: Windows Installer re-registers the service with its
+      authored start type (manual) and stops it, so a configured
+      installation would stay stopped and Discord blocked by the persistent
+      policy. `start` with the msi flag restarts it only if a profile exists
+      AND the persistent WFP policy is installed (configured and not
+      disabled / recovered by the user); otherwise it changes nothing. Never
+      prompts, always returns 0.
+
+      Execute="commit": it runs only after the whole installation script
+      (including the removal of the old version) has succeeded, i.e. when
+      the transaction is committed in InstallFinalize, as LocalSystem. If
+      the installation fails it never runs; the rollback restores the old
+      version's files and service registration instead (see
+      ARCHITECTURE.md). Maintenance is rejected before the transaction when
+      RollbackDisabled is set, since commit actions would be skipped.
+    -->
+    <SetProperty Id="AuraResume"
+                 Value="&quot;[INSTALLFOLDER]aurasplit.exe&quot; start --msi"
+                 Before="AuraResume"
+                 Sequence="execute" />
+    <CustomAction Id="AuraResume"
+                  BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+                  DllEntry="WixQuietExec"
+                  Execute="commit"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="AuraRollbackRequired" Before="InstallInitialize"
+              Condition="RollbackDisabled AND (WIX_UPGRADE_DETECTED OR REINSTALL OR (Installed AND NOT REMOVE) OR (REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE))" />
+      <Custom Action="AuraExeMissing" Before="AuraRollbackRequired"
+              Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE AND NOT AURAEXEFOUND" />
+      <Custom Action="AuraSaveRecoverState" Before="AuraRecoverRollback"
+              Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE AND AURAEXEFOUND" />
+      <Custom Action="AuraRecoverRollback" Before="AuraRecover"
+              Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE AND AURAEXEFOUND" />
+      <Custom Action="AuraRecover" Before="StopServices"
+              Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE AND AURAEXEFOUND" />
+      <Custom Action="AuraCleanData" Before="RemoveFiles"
+              Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE AND AURAEXEFOUND" />
+      <Custom Action="AuraResume" After="StartServices"
+              Condition="NOT REMOVE AND (WIX_UPGRADE_DETECTED OR REINSTALL)" />
+    </InstallExecuteSequence>
+  </Package>
+</Wix>

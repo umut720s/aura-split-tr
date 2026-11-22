@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Continuous integration: build, vet, test, lint, vulnerability scan, MSI
+# build + ICE validation. This workflow never publishes anything.
+#
+# Third-party actions are pinned to full commit SHAs (tag in the trailing
+# comment). SHAs were resolved with `git ls-remote` on 2026-11-21; re-verify
+# when bumping (e.g. with Dependabot for github-actions).
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CGO_ENABLED: "0"
+  GOOS: windows
+  GOARCH: amd64
+  GOAMD64: v1
+  GOFLAGS: -mod=readonly
+  BUILD_TAGS: with_gvisor,with_wireguard,with_external_windivert
+  STATICCHECK_VERSION: v0.8.2   # honnef.co/go/tools (staticcheck 2026.2.x)
+  GOVULNCHECK_VERSION: v1.10.0  # golang.org/x/vuln
+  WIX_VERSION: "5.0.2"          # WiX Toolset (dotnet global tool), pinned
+
+jobs:
+  check:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go (version from go.mod)
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Show toolchain
+        run: go version; go env GOVERSION GOOS GOARCH
+
+      - name: Verify module checksums
+        run: go mod verify
+
+      - name: gofmt
+        run: |
+          $files = gofmt -l .
+          if ($files) { Write-Host "gofmt needed:"; $files; exit 1 }
+
+      - name: Build (release tags)
+        run: ./build.ps1 -Version 0.0.0-ci -NoMsi
+
+      - name: go vet (release tags)
+        run: go vet -tags $env:BUILD_TAGS ./...
+
+      - name: go test (default tags)
+        run: go test -count=1 ./...
+
+      - name: go test (release tags)
+        run: go test -count=1 -tags $env:BUILD_TAGS ./...
+
+      - name: staticcheck
+        run: go run "honnef.co/go/tools/cmd/staticcheck@$env:STATICCHECK_VERSION" -tags $env:BUILD_TAGS ./...
+
+      - name: govulncheck
+        run: go run "golang.org/x/vuln/cmd/govulncheck@$env:GOVULNCHECK_VERSION" -tags $env:BUILD_TAGS ./...
+
+      # WiX 5.0.2 is pinned on purpose (WiX 6+ requires accepting the OSMF
+      # EULA, which this project has not accepted).
+      - name: Install WiX Toolset 5.0.2 (pinned)
+        run: |
+          dotnet tool install --global wix --version $env:WIX_VERSION
+          "$env:USERPROFILE\.dotnet\tools" >> $env:GITHUB_PATH
+          & "$env:USERPROFILE\.dotnet\tools\wix.exe" extension add -g "WixToolset.Util.wixext/$env:WIX_VERSION"
+
+      # Builds dist\aurasplit.exe + dist\AuraSplitTR-0.0.0-ci-x64.msi (MSI
+      # version 0.0.0) and validates the MSI with the ICE rules. Nothing is
+      # installed. Unsigned; CI artifacts are for testing only (no
+      # provenance: that is produced by the release workflow).
+      - name: Build exe + MSI
+        run: ./build.ps1 -Version 0.0.0-ci
+
+      - name: Upload CI build (unsigned, testing only)
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: aurasplit-ci-${{ github.sha }}
+          path: |
+            dist/aurasplit.exe
+            dist/AuraSplitTR-*-x64.msi
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
