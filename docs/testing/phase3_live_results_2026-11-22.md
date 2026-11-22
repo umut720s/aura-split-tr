@@ -147,3 +147,15 @@ UX defects found:
 | UX-3 / S9-S10 | Network loss: Ethernet unplugged 18:19:43-18:20:22 | PASS | Status `VPN_DISCONNECTED` at 18:19:43 (same second as link down; first poll 18:19:46); `VPN_CONNECTIVITY_VERIFIED` at 18:20:28, 6 s after replug. Per-second socket sampling: 0 Discord TCP sockets outside the TUN for the whole run; Discord reconnected via TUN after replug. |
 
 Notes: two UAC prompts for the status poller were cancelled/timed out during this run and were re-issued; that did not affect the measurements above.
+
+## Live run 5 - packet-capture leak tests (2026-11-22, 18:37-18:50), commit 4ee37d8
+
+Tooling: `tools/leaktest/capture.ps1` (pktmon on the physical "Ethernet" NIC, 256-byte snaplen) + `tools/leaktest/analyze.py` (DNS qnames, TLS ClientHello SNI, HTTP Host; QUIC SNI not parsed). Captures stay outside the repo (they contain the user's browsing host names). Before the run the installed app was upgraded via MSI to the round-7 build (exit 0, service restarted, VPN verified in 13 s).
+
+| ID | Scenario | Result | Evidence / notes |
+|---|---|---|---|
+| L1+L4 | Service running; Discord restarted, voice joined ~30 s, browser opened https://discord.com and unrelated sites (120 s) | PASS (no indicators) | 155,505 packets, 68,045 to the WireGuard endpoint; 0 Discord DNS queries, 0 Discord TLS SNI, 0 Discord HTTP Host on the physical NIC; 0 IPv6 packets. 2 QUIC (UDP 443) flows with unparsed SNI were later attributed to Spotify by socket owner (35.186.224.x). Analyzer caveats: ECH/encrypted DNS/truncation can hide names. |
+| L2 (first try) | Service stopped (`stop`), Discord app restarted, a discord.com browser tab was still open (90 s) | Expected limitation | Discord DNS names (gateway.discord.gg, discordapp.com, status.discord.com, a voice host) went to the DNS server on the physical NIC; 4 TLS ClientHellos with SNI discord.com / cdn.discordapp.com also went out. A follow-up socket-owner check showed no Discord.exe connections off the TUN and no loopback proxy (Kaspersky HTTPS scanning ruled out); the TLS flows are attributed to the still-open browser tab (browser Discord is not covered by the WFP policy - documented). |
+| L2b | Service stopped, browser Discord tab closed, Discord app restarted (75 s) | PASS for the app / DNS leak as documented | 0 Discord TLS SNI, 0 HTTP Host; 9 Discord DNS queries (gateway*.discord.gg, discord.com, discordapp.com, cdn.discordapp.com, updates.discord.com) to the DNS server - the Windows DNS Client resolves names even though WFP blocks the connections. |
+
+Conclusions: with the service running, no Discord names were visible on the physical NIC in this capture. With the service stopped, the Discord app could not connect (no TLS), but Discord host names leak in plaintext DNS, and browser Discord tabs connect directly. Not covered: boot-window capture, QUIC SNI, ECH, other machines/AV products.
