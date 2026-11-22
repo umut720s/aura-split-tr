@@ -34,7 +34,7 @@ func run(args []string, stderr io.Writer, isAdmin func() bool, cleanup func() in
 		}
 	}
 	if !msi || len(positional) != 1 || (positional[0] != "uninstall" && positional[0] != "kaldir") {
-		fmt.Fprintln(stderr, "Kullanım: auraclean.exe uninstall --msi")
+		fmt.Fprintf(stderr, "auraclean %s\nKullanım: auraclean.exe uninstall --msi\n", version)
 		return 2
 	}
 	if !isAdmin() {

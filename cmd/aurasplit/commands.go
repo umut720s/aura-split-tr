@@ -421,8 +421,6 @@ func describeCleanup(dir string, res paths.CleanResult) []string {
 	return msiclean.DescribeCleanup(dir, res)
 }
 
-func quarantineDirs() (ours, foreign []string) { return msiclean.QuarantineDirs() }
-
 func consoleLog(level, msg string) {
 	fmt.Fprintf(os.Stderr, "%s %s [aurasplit] %s\n", time.Now().Format("2006-01-02 15:04:05"), level, logfile.ScrubString(msg))
 }
