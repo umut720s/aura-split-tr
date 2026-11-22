@@ -194,7 +194,7 @@ real-world test plan §5. No targets were invented.
 | Item | Status |
 |---|---|
 | Repository clean of personal paths / credentials / configs / binaries | PASS (`dist/` and `*.exe` git-ignored; no commits yet) |
-| LICENSE, NOTICE, THIRD_PARTY_LICENSES, README, CONTRIBUTING, SECURITY, TRADEMARKS, .gitignore | Prepared; repository owner now set to `umut720s/aura-split-tr`; placeholders `<copyright holders>` and `<security-contact>` remain |
+| LICENSE, NOTICE, THIRD_PARTY_LICENSES, README, CONTRIBUTING, SECURITY, TRADEMARKS, .gitignore | Prepared; repository: https://github.com/umut720s/aura-split-tr; project copyright is 2026 AURA Split TR contributors; private vulnerability reporting: see SECURITY.md |
 | Build instructions / checksums | Prepared (`docs/BUILD.md`, `build.ps1`, `SHA256SUMS.txt`) |
 | Release notes / known limitations | Prepared (`docs/RELEASE_NOTES_v0.1.0-beta.md`) |
 | CI (build, test, vet, staticcheck, govulncheck, gofmt) | Prepared, NOT TESTED on GitHub |

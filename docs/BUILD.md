@@ -43,8 +43,8 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Version 0.1.0-beta -Strict
 
 Output: `dist\aurasplit.exe`, `dist\AuraSplitTR-<version>-x64.msi` and
 `dist\SHA256SUMS.txt` (both files). Switches: `-NoMsi` (exe only), `-MsiOnly`
-(package the existing `dist\aurasplit.exe`; the release workflow signs the exe
-between the two steps).
+(package the existing `dist\aurasplit.exe`; when signing is configured for a later
+release, the release workflow signs the exe between the two steps).
 
 ### MSI
 

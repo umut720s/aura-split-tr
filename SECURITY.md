@@ -44,12 +44,14 @@
   bağımlılığıyla çalıştığını doğrular. Uymuyorsa MSI onarımını ister. Yeni profil ancak
   çalışan hizmet durdurulduktan sonra eskisinin yerine geçer. MSI hizmeti **El ile**
   başlatma türüyle kaydeder; yalnızca yapılandırma onu otomatik yapar.
-- **İmza.** Sürümler henüz Authenticode ile imzalı değildir (iş akışında imzalama adımı
-  hazırdır, yapılandırılmadıkça atlanır; sahte veya kendinden imzalı imza üretilmez).
-  İmzasız bir programın hizmet kurması ve kalıcı WFP filtresi eklemesi bazı antivirüs
-  ürünlerince (ör. canlı testte Kaspersky davranış algılaması, eski kendi kendini kuran
-  sürümde) şüpheli bulunabilir. Antivirüsü kapatmayın, istisna eklemeyin; yanlış alarmı
-  üreticiye bildirin. Araç hiçbir antivirüs algılamasını atlatmaya çalışmaz.
+- **İmza.** **v0.1.0-beta dosyaları (exe ve MSI) Authenticode ile imzalı DEĞİLDİR.**
+  Windows SmartScreen ve antivirüs ürünleri uyarı verebilir. Her dosyanın SHA-256
+  özetini aynı sürümün `SHA256SUMS.txt` dosyasıyla karşılaştırın ve GitHub derleme
+  kaynağı doğrulamasını (build provenance attestation) yapın:
+  `gh attestation verify <file> -R umut720s/aura-split-tr` (`<file>` yerine indirilen
+  dosyanın yolunu yazın). Doğrulama başarısızsa dosyayı çalıştırmayın.
+  **Antivirüsü asla kapatmayın veya istisna eklemeyin.** Yanlış pozitifleri antivirüs
+  üreticisine bildirin. Authenticode imzalama daha sonraki bir sürüm için planlanıyor.
 - **Kaldırma** Windows Installer ile yapılır: önce `recover --msi` (LocalSystem, pencere
   ve soru yok) kalıcı WFP politikasını kaldırır ve hizmeti devre dışı bırakıp durdurur.
   **Bu adım başarısız olursa** (politika kaldırılamadı ya da hâlâ yüklü, WFP motoru
@@ -233,10 +235,8 @@ görünmez.
 Lütfen güvenlik açıklarını herkese açık bir issue, tartışma veya pull request
 olarak **bildirmeyin**. Bunun yerine:
 
-1. **Tercih edilen:** GitHub özel güvenlik bildirimi —
-   `https://github.com/umut720s/aura-split-tr/security/advisories/new`
-   (depo sayfasında *Security → Report a vulnerability*).
-2. Bu mümkün değilse: `<security-contact>`.
+GitHub özel güvenlik bildirimi yolunu kullanın: https://github.com/umut720s/aura-split-tr/security/advisories/new
+(depo sayfasında **Security → Report a vulnerability**).
 
 Mümkünse şunları ekleyin:
 
@@ -246,7 +246,7 @@ Mümkünse şunları ekleyin:
   `C:\Users\<ad>\...` yollarında), bilgisayar adını, IP adreslerini ve paylaşmak
   istemediğiniz alan adlarını gizleyin. **`.conf` dosyası, `profile.json`, özel
   anahtar, preshared key veya WARP token göndermeyin.** Günlük bunları içermez,
-  yine de gizli değer olmadığından emin olun.
+  yine de gizli değer olmadığından emin olun. **Sansürlenmemiş günlükleri asla göndermeyin.**
 
 Süreç (hedefler, garanti değildir): alındı bildirimi 7 gün içinde; ilk
 değerlendirme 14 gün içinde; düzeltme ve eşgüdümlü açıklama en geç 90 gün içinde.
@@ -258,14 +258,13 @@ sahibi olarak anılırsınız. Desteklenen sürüm: yalnızca en son yayımlanan
 Please report vulnerabilities **privately**, not as a public issue, discussion
 or pull request:
 
-1. Preferred: GitHub private vulnerability reporting —
-   `https://github.com/umut720s/aura-split-tr/security/advisories/new`.
-2. Otherwise: `<security-contact>`.
+Use GitHub private vulnerability reporting: https://github.com/umut720s/aura-split-tr/security/advisories/new
+(**Report a vulnerability** on the **Security** tab).
 
 Include the version (`aurasplit.exe version`), Windows version, impact and
 reproduction steps. **Redact user names** (e.g. `C:\Users\<name>\...`), machine
 names, IP addresses and host names from log lines, and never send `.conf`
-files, `profile.json`, private/preshared keys or WARP tokens. Targets: ack
+files, `profile.json`, private/preshared keys, WARP tokens or unredacted logs. Targets: ack
 within 7 days, triage within 14 days, fix and coordinated disclosure within
 90 days. Only the latest release is supported.
 
@@ -325,7 +324,10 @@ of the host IPv6 capability (preferred usable global address and ::/0 on the IPv
 default interface selected by the pinned sing-tun monitor using route + interface metric),
 at most once per 2 minutes, with the persistent policy blocking
 Discord in the gap (NOT TESTED on a real network).
-Releases are not Authenticode-signed yet (an optional signing step exists and is skipped
-unless configured; no fake signatures); verify SHA256SUMS.txt and the build provenance
-attestation (docs/BUILD.md). Do not disable antivirus or add exclusions; report false
-positives.
+v0.1.0-beta binaries (exe and MSI) are **NOT Authenticode-signed**. Windows
+SmartScreen and antivirus products may warn. Verify each file's SHA-256 against
+`SHA256SUMS.txt` from the same release and verify the GitHub build provenance
+attestation: `gh attestation verify <file> -R umut720s/aura-split-tr` (replace
+`<file>` with the downloaded file's path). Do not run a file if verification fails.
+**Never disable antivirus or add exclusions.** Report false positives to the AV
+vendor. Authenticode signing is planned for a later release.

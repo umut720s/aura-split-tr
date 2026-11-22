@@ -56,7 +56,7 @@ Embedded binary hashes (from the module cache):
   `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`, which is
   the hash of the canonical `https://www.gnu.org/licenses/gpl-3.0.txt`.
 - `NOTICE` holds the project header ("AURA Split TR — Copyright (C) 2026
-  <copyright holders> — GPL-3.0-or-later") and upstream attributions.
+  AURA Split TR contributors — GPL-3.0-or-later") and upstream attributions.
 
 ## 3. Items requiring the maintainer's decision
 
@@ -96,9 +96,8 @@ agents check whether the WinDivert path is reachable and, if not, add the tag
 
 ### 3.3 Other decisions
 
-- Copyright holder name(s) for `NOTICE` (`<copyright holders>` placeholder).
-- Repository owner is now `umut720s/aura-split-tr`; `<security-contact>` remains to be filled (README, SECURITY,
-  TRADEMARKS, BUILD, CONTRIBUTING, release notes).
+- Project copyright in `NOTICE`: Copyright (C) 2026 AURA Split TR contributors.
+- Repository: https://github.com/umut720s/aura-split-tr; private vulnerability reporting: see SECURITY.md.
 - Disclosure timelines in SECURITY.md (7/14/90 days) and DCO sign-off
   request in CONTRIBUTING.md are proposals.
 - Supported OS: README "Sınırlamalar" says Windows 10/11; the release notes

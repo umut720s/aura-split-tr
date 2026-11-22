@@ -29,6 +29,17 @@ arka planda Windows hizmeti olarak çalışan küçük bir araç.
 | **Proton VPN** | Free veya Plus | Proton hesabından indirilen WireGuard `.conf` dosyası |
 | **Diğer WireGuard** | Sağlayıcıya bağlı | Herhangi bir standart WireGuard `.conf` dosyası |
 
+## İmzasız beta ve indirme doğrulaması
+
+**v0.1.0-beta dosyaları (exe ve MSI) Authenticode ile imzalı DEĞİLDİR.**
+Windows SmartScreen ve antivirüs ürünleri uyarı verebilir. Her dosyanın SHA-256
+özetini aynı sürümün `SHA256SUMS.txt` dosyasıyla karşılaştırın ve GitHub derleme
+kaynağı doğrulamasını (build provenance attestation) yapın:
+`gh attestation verify <file> -R umut720s/aura-split-tr` (`<file>` yerine indirdiğiniz
+dosyanın yolunu yazın). Doğrulama başarısızsa dosyayı çalıştırmayın.
+**Antivirüsü asla kapatmayın veya istisna eklemeyin.** Yanlış pozitifleri antivirüs
+üreticisine bildirin. Authenticode imzalama daha sonraki bir sürüm için planlanıyor.
+
 ## Kurulum
 
 1. [GitHub Releases](https://github.com/umut720s/aura-split-tr/releases) sayfasındaki
@@ -411,7 +422,16 @@ removes the profile/key and logs only from a trusted data folder; unexpected con
 are left for private manual inspection. Details: [removal](#kaldırma).
 
 No telemetry. Logs default to `warn`; failed lookups/connections may include hostnames.
-Redact personal data before sharing logs. This beta is **not Authenticode-signed**.
+Redact personal data before sharing logs.
+
+**v0.1.0-beta binaries (exe and MSI) are NOT Authenticode-signed.** Windows
+SmartScreen and antivirus products may warn. Verify each file's SHA-256 against
+`SHA256SUMS.txt` from the same release and verify the GitHub build provenance
+attestation with `gh attestation verify <file> -R umut720s/aura-split-tr`
+(replace `<file>` with the downloaded file's path). Do not run a file if verification
+fails. **Never disable antivirus or add exclusions.** Report false positives to the
+AV vendor. Authenticode signing is planned for a later release.
+
 Build/checksum/provenance details: [docs/BUILD.md](docs/BUILD.md).
 GPL-3.0-or-later: [LICENSE](LICENSE), [NOTICE](NOTICE), [third-party licenses](THIRD_PARTY_LICENSES.md).
 Provider terms and local law remain your responsibility. Not affiliated with Discord,

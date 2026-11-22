@@ -87,10 +87,10 @@ may work but is not supported in this beta).
 - May conflict with other VPN/TUN clients (Proton VPN app, WARP app, etc.).
 - Discord must be fully restarted after setup or provider changes.
 - Requires administrator rights.
-- **Not Authenticode-signed** (exe and msi). Windows SmartScreen will warn
-  ("Windows protected your PC"). Verify the download instead (see below). The
-  release workflow has an optional signing step that is skipped until a
-  certificate/service is configured.
+- **v0.1.0-beta binaries (exe and MSI) are NOT Authenticode-signed.** Windows
+  SmartScreen and antivirus products may warn. Verify each file's SHA-256 against
+  `SHA256SUMS.txt` and its GitHub build provenance attestation (see below).
+  Authenticode signing is planned for a later release.
 - **Antivirus false positives are possible.** The binary is an unsigned Go
   executable that runs as a service, adds persistent WFP filters, creates a TUN
   adapter (embedded Wintun DLL loaded from memory) and embeds a WinDivert
@@ -98,7 +98,7 @@ may work but is not supported in this beta).
   self-installing setup was flagged by a behaviour detection and the new
   service process was held in START_PENDING; the switch to an MSI install (and
   later signing) is the mitigation, not yet re-tested. Report false positives
-  to the AV vendor; do not disable your AV or add exclusions.
+  to the AV vendor; never disable your AV or add exclusions.
 - The embedded upstream Wintun DLL contains its author's PDB build path.
 - Not a privacy/anonymity tool: only Discord traffic is tunnelled; the VPN
   provider can see Discord connection metadata.
@@ -117,9 +117,14 @@ Official files are built by the manual release workflow from tag
 
 ```powershell
 (Get-FileHash .\AuraSplitTR-0.1.0-beta-x64.msi -Algorithm SHA256).Hash.ToLower()
-gh attestation verify AuraSplitTR-0.1.0-beta-x64.msi --repo umut720s/aura-split-tr
-gh attestation verify aurasplit.exe --repo umut720s/aura-split-tr
+Get-Content .\SHA256SUMS.txt
+gh attestation verify AuraSplitTR-0.1.0-beta-x64.msi -R umut720s/aura-split-tr
+gh attestation verify aurasplit.exe -R umut720s/aura-split-tr
 ```
+
+For each downloaded file, compare its SHA-256 with the matching entry in
+`SHA256SUMS.txt` and run `gh attestation verify <file> -R umut720s/aura-split-tr`
+(replace `<file>` with its path). Do not run a file if either verification fails.
 
 TODO(maintainer): paste the SHA-256 values from the workflow run here.
 

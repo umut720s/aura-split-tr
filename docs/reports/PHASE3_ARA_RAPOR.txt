@@ -98,8 +98,8 @@ Bu islerin bitip bitmedigi bu dosyada YAZMAZ; klasoru kontrol et.
 ======================================================================
 6. KULLANICININ YAPMASI GEREKENLER
 ======================================================================
-1. Yer tutuculari doldur: telif sahibi adi, <OWNER>/<REPO>,
-   <security-contact>.
+1. Telif sahibi: 2026 AURA Split TR contributors. Depo:
+   https://github.com/umut720s/aura-split-tr; ozel guvenlik bildirimi: SECURITY.md.
 2. Wintun lisansi icin karar ver (gerekirse hukuki gorus).
 3. Gercek testi bir sanal makinede (Hyper-V + geri donus noktasi),
    docs/testing/phase3_realworld_test_plan.md adimlariyla yap ya da
