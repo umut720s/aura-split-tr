@@ -122,3 +122,17 @@ Environment as before (same PC, Kaspersky Plus active, IPv4-only Ethernet). User
 | S14 | `msiexec /x` uninstall | PASS | exit 0; custom actions ran in order (save state -> recover -> clean data; rollback action only scheduled); service, install dir, Start Menu entry, TUN adapter and `%ProgramData%\AuraSplitTR` gone; 0 AURA filters/sublayer; IP addresses, DNS servers and routes identical to the pre-install capture. |
 
 Still NOT TESTED live: MSI rollback paths (forced failure during uninstall/upgrade), generic WireGuard (S5), VPN disconnection/reconnection by network loss (S9/S10), invalid configuration (S13), packet-capture leak tests (section 4), CPU measurement.
+
+## Live run 3 (2026-11-22, 17:37-17:48) - same build as run 2
+
+| ID | Scenario | Result | Evidence / notes |
+|---|---|---|---|
+| S5 | Generic WireGuard (configurator option 3, Proton .conf used as a generic config) | PASS | Service running, protection complete; first probe 8 s after start failed ("connection failed"), second probe 30 s later `VPN_CONNECTIVITY_VERIFIED`; Discord 2/2 sockets via TUN; user confirmed Discord works. |
+| S9/S10 | Network loss and recovery (Ethernet unplugged ~40 s: 17:42:51-17:43:31) | PASS (protection) / gap (status) | Per-second sampling: 0 Discord sockets outside the TUN for the whole run; direct outbound for other apps failed with "no route to internet" while unplugged (expected); after replug the WireGuard socket was re-created and TUN traffic resumed within seconds. The status did NOT show VPN_DISCONNECTED: the probe runs every 5 min, so a 40 s outage is not reflected. |
+| S13 | Invalid configuration file | PASS | Configurator rejected it ("Bu dosya geçerli bir WireGuard yapılandırması değil", no key material echoed); the running Proton/generic profile, WFP policy and Discord TUN routing were unchanged. |
+| S14 | Uninstall | PASS | exit 0; service, files, data dir, Start Menu entry, TUN adapter and AURA WFP objects removed. |
+
+UX defects found:
+1. **Drag-and-drop into the configurator does not work**: the configurator runs elevated and Windows (UIPI) blocks drag-and-drop from the non-elevated Explorer. Workaround used: "Copy as path" + paste. README currently tells users to drag the file.
+2. **First connectivity probe is too early** (3 s after tunnel start): it regularly reports `VPN_DEGRADED` for the first ~30-120 s before the WireGuard handshake completes (seen with WARP, Proton and generic).
+3. **Short outages are not reflected in the status** (5-min probe interval, no probe on network change).
