@@ -1137,6 +1137,14 @@ periodic reconnect via S9/S10 if authorized). Look at the trend of handles, priv
 
 ---
 
+## Packet-capture leak test toolkit
+
+See [tools/leaktest/README.md](../../tools/leaktest/README.md) for the maintainer-run
+physical-NIC `pktmon` capture script, offline stdlib-only analyzer, and L1–L4 scenarios.
+Keep captures/metadata outside the repository; share only the local-IP-masked JSON report.
+QUIC SNI, ECH, encrypted DNS and snaplen truncation limit negative evidence. Toolkit
+availability does not mark any scenario tested; the authorization rules above still apply.
+
 ## 6. Privacy note
 
 * Evidence files contain the VM's and the user's **public IP addresses** (cdn-cgi/trace, captures, netevents),
