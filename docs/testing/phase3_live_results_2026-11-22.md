@@ -136,3 +136,14 @@ UX defects found:
 1. **Drag-and-drop into the configurator does not work**: the configurator runs elevated and Windows (UIPI) blocks drag-and-drop from the non-elevated Explorer. Workaround used: "Copy as path" + paste. README currently tells users to drag the file.
 2. **First connectivity probe is too early** (3 s after tunnel start): it regularly reports `VPN_DEGRADED` for the first ~30-120 s before the WireGuard handshake completes (seen with WARP, Proton and generic).
 3. **Short outages are not reflected in the status** (5-min probe interval, no probe on network change).
+
+## Live run 4 (2026-11-22, 18:05-18:21) - commit 94399c2 (UX fixes)
+
+| ID | Scenario | Result | Evidence / notes |
+|---|---|---|---|
+| S1 | MSI install | PASS | exit 0, service stopped/manual until configured. |
+| UX-1 | Configurator file picker | PASS (user-observed) | The native "Open file" dialog opened from the elevated configurator; the Proton .conf was selected and setup completed. |
+| UX-2 | Start-up grace (VPN_CONNECTING) | PASS | Elevated status poll every 3 s: 18:06:44 service RUNNING + `VPN_CONNECTING — bağlanıyor`; 18:06:55 `VPN_CONNECTIVITY_VERIFIED`. No VPN_DEGRADED shown. |
+| UX-3 / S9-S10 | Network loss: Ethernet unplugged 18:19:43-18:20:22 | PASS | Status `VPN_DISCONNECTED` at 18:19:43 (same second as link down; first poll 18:19:46); `VPN_CONNECTIVITY_VERIFIED` at 18:20:28, 6 s after replug. Per-second socket sampling: 0 Discord TCP sockets outside the TUN for the whole run; Discord reconnected via TUN after replug. |
+
+Notes: two UAC prompts for the status poller were cancelled/timed out during this run and were re-issued; that did not affect the measurements above.
