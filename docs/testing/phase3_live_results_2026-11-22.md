@@ -108,3 +108,17 @@ reconnection (S9/S10), Windows restart with the service enabled (S12),
 invalid configuration (S13), `disable` (S14b), MSI rollback (S15), packet
 capture leak tests (§4), CPU measurement. The three live-test fixes and the
 MSI conversion have **not** been reviewed by Codex yet.
+
+## Live run 2 (2026-11-22, 17:15-17:36) - commit 87e24f8, MSI 87f18a56...
+
+Environment as before (same PC, Kaspersky Plus active, IPv4-only Ethernet). User-approved, UAC per elevated step.
+
+| ID | Scenario | Result | Evidence / notes |
+|---|---|---|---|
+| S1 | MSI install (new build with icon/version resource) | PASS | exit 0; service demand-start, BFE dependency, stopped; 0 AURA WFP filters; exe version 0.1.0.0; no AV alert. |
+| S4 | Configure Cloudflare WARP (new registration) | PASS (self-recovered) | First 3 probes timed out (`VPN_DEGRADED`); the engine rebuilt the tunnel automatically (log: "rebuilding the tunnel: VPN connectivity lost (3 consecutive probe failures)") and was `VPN_CONNECTIVITY_VERIFIED` 5 s later. Likely cause: a freshly registered WARP key needs a short time to become active (not proven). User ran a speed test and used Discord. |
+| S12 | Windows restart with the service enabled | PASS | Boot 17:21:52, tunnel started 17:22:04 (12 s), VPN verified; after the user opened Discord: 6/6 established Discord TCP sockets via TUN `172.19.0.1`. Boot-window leak capture (pktmon) NOT TESTED. |
+| S14b | `disable` then `start` | PASS | `disable`: start type DISABLED, 0 AURA WFP filters, Discord 3/3 sockets direct. `start`: AUTO_START, VPN verified in 8 s, Discord 3/3 sockets via TUN. |
+| S14 | `msiexec /x` uninstall | PASS | exit 0; custom actions ran in order (save state -> recover -> clean data; rollback action only scheduled); service, install dir, Start Menu entry, TUN adapter and `%ProgramData%\AuraSplitTR` gone; 0 AURA filters/sublayer; IP addresses, DNS servers and routes identical to the pre-install capture. |
+
+Still NOT TESTED live: MSI rollback paths (forced failure during uninstall/upgrade), generic WireGuard (S5), VPN disconnection/reconnection by network loss (S9/S10), invalid configuration (S13), packet-capture leak tests (section 4), CPU measurement.
