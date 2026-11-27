@@ -504,13 +504,15 @@ func TestRemoveAllOrder(t *testing.T) {
 }
 
 // A fresh Guard (new service process) with an incomplete first discovery
-// keeps the filters of the previous process and permits them on the
-// tunnel.
+// keeps the filters of the previous process, but cannot activate a tunnel
+// permit until discovery and whole-manifest readback complete.
 func TestGuardFreshBaselineFromWFP(t *testing.T) {
 	b := newFake()
-	a, c := `C:\u\x\Discord\Update.exe`, `C:\u\x\Discord\app-1\Discord.exe`
+	a, c := `C:\Users\fixture\AppData\Local\Discord\Update.exe`, `C:\Users\fixture\AppData\Local\Discord\app-1\Discord.exe`
 	mustApply(t, &Firewall{b: b}, []string{a, c}, Authoritative)
-	g := NewGuard(&Firewall{b: b}, func() ([]string, error) { return nil, errors.New("access denied") }, nil, nil)
+	var found []string
+	derr := errors.New("access denied")
+	g := NewGuard(&Firewall{b: b}, func() ([]string, error) { return found, derr }, nil, nil)
 	if err := g.Reconcile(); !errors.Is(err, ErrIncomplete) {
 		t.Fatalf("Reconcile = %v", err)
 	}
@@ -520,6 +522,20 @@ func TestGuardFreshBaselineFromWFP(t *testing.T) {
 	st := g.Status()
 	if !st.Applied || st.Complete || st.Apps != 2 || st.Incomplete == "" {
 		t.Fatalf("status %+v", st)
+	}
+	if h, err := g.TunnelUp(5); err == nil || h != nil {
+		t.Fatal("incomplete discovery accepted for tunnel activation")
+	}
+	if n := b.bfe.count(func(f Filter) bool { return !f.Persistent }); n != 0 {
+		t.Fatalf("incomplete discovery created %d dynamic permits", n)
+	}
+	// A successful retry must read back both executables before activation.
+	found, derr = []string{a, c}, nil
+	if err := g.Reconcile(); err != nil {
+		t.Fatal(err)
+	}
+	if st := g.Status(); !st.Complete || st.Ready || st.Apps != 2 {
+		t.Fatalf("status after discovery retry %+v", st)
 	}
 	h, err := g.TunnelUp(5)
 	if err != nil {

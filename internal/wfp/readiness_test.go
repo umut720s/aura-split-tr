@@ -250,6 +250,9 @@ func TestFailedLegacySessionClosureRetriedBeforeReady(t *testing.T) {
 	g.CheckOldFlows = func([]string) (bool, string) { return true, "test gate" }
 	g.applied, g.tunnel, g.luid = true, true, 1
 	g.covered, g.permits = []string{canonical, legacy}, []Permit{p}
+	legacyTunnelPermit := func(f Filter) bool {
+		return !f.Persistent && f.Action == ActionPermit && f.Path == legacy
+	}
 	for i := 0; i < 2; i++ {
 		calls := s.closeCalls
 		if err := g.Reconcile(); err != nil {
@@ -259,7 +262,7 @@ func TestFailedLegacySessionClosureRetriedBeforeReady(t *testing.T) {
 		if owned.s != s || s.closed || s.closeCalls <= calls || len(g.permits) != 1 || g.permits[0] != p || !st.PendingPermitClosure || st.Ready || st.PermitComplete || !strings.Contains(st.Err, "closure pending") {
 			t.Fatalf("failed close lost or readiness granted: %+v", st)
 		}
-		if b.bfe.count(func(f Filter) bool { return f.Action == ActionPermit && f.Path == legacy }) == 0 {
+		if b.bfe.count(legacyTunnelPermit) != len(Layers) {
 			t.Fatal("fake did not retain legacy permits")
 		}
 	}
@@ -270,11 +273,17 @@ func TestFailedLegacySessionClosureRetriedBeforeReady(t *testing.T) {
 	if st := g.Status(); owned.s != nil || !s.closed || st.PendingPermitClosure || !st.Ready {
 		t.Fatalf("closure retry failed: %+v", st)
 	}
-	if b.bfe.count(func(f Filter) bool { return f.Action == ActionPermit && f.Path == legacy }) != 0 {
+	if b.bfe.count(legacyTunnelPermit) != 0 {
 		t.Fatal("legacy permit survived closure")
 	}
-	if b.bfe.count(func(f Filter) bool { return f.Persistent && f.Path == legacy }) != len(Layers) {
+	if b.bfe.count(func(f Filter) bool { return f.Persistent && f.Action == ActionBlock && f.Path == legacy }) != len(Layers) {
 		t.Fatal("legacy blocks removed")
+	}
+	// Persistent loopback permits belong to the baseline, not the retired session.
+	if b.bfe.count(func(f Filter) bool {
+		return f.Persistent && f.Action == ActionPermit && f.Loopback && f.Path == legacy
+	}) != len(Layers) {
+		t.Fatal("legacy loopback permits removed")
 	}
 	_ = g.tunnelDown()
 }
