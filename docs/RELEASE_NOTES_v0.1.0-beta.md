@@ -1,165 +1,91 @@
-# AURA Split TR v0.1.0-beta — sürüm notları / release notes
+# v0.1.0-beta (experimental)
 
-First public beta (pre-release). **Platform: Windows 11 x64 only** (tested target; Windows 10
-may work but is not supported in this beta).
+**Deneysel, üretime hazır değildir / Experimental, not production-ready.** Exe/MSI Authenticode imzasızdır; bağımsız paket düzeyi doğrulaması yoktur. Riski size ait olmak üzere kullanın / Use at your own risk.
 
-## Canlı test özeti / Live validation
+## Özellikler / Features
 
-Canlı testler **tek Windows 11 x64 PC'de, IPv4-only Ethernet, Kaspersky Plus
-açık ve imzasız beta** ile yapıldı. TCP soket gözlemi paket yakalama değildir;
-UDP/DNS ve açılış penceresi doğrulanmadı. Run 3 sonrası dosya seçici,
-`VPN_CONNECTING` başlangıç toleransı ve ağ-değişimi probe düzeltmesi uygulandı,
-**henüz canlı test edilmedi**. Yayımlanan beta bir ön sürümdür; üretime hazır değildir.
+- Masaüstü Discord, güncelleyici ve bilinen yardımcılar için WireGuard yönlendirmesi; diğer uygulamalar doğrudan bağlanır. Tarayıcı/alan adı ve DNS yönlendirmesi best-effort'tur.
+- Cloudflare WARP kaydı, Proton VPN `.conf` ve tek eşli standart WireGuard yapılandırması desteği.
+- MSI kurulum/kaldırma, arka plan Windows hizmeti, Türkçe dosya seçicili yapılandırıcı; ayrı hizmet/tünel/bağlantı/kapsam durumu.
+- Bilinen program yolları için sınırlandırılmış kalıcı WFP engelleri, yeniden bağlanma ve eski süreç kapısı. Çoklu adaptör sağlık failover'ı eklendi; canlıda doğrulanmadı.
 
-All live tests used **one Windows 11 x64 PC, IPv4-only Ethernet, Kaspersky Plus
-active, unsigned beta**. Details and chronology:
-[live runs 1–3](testing/phase3_live_results_2026-11-22.md).
-**Published as a pre-release; not production-ready.**
+Routes desktop Discord, its updater and known helpers through WireGuard; other apps stay direct. Includes WARP registration, Proton/standard single-peer WireGuard configs, MSI installation, a background service, Turkish setup wizard and separate connection/coverage status. Persistent executable blocks and reconnection have the limits below; new health-aware egress failover is not live-tested.
 
-| Category | Result / observation method |
-|---|---|
-| **Observed — Discord** | Proton, WARP and generic WireGuard (a Proton `.conf` used for the generic option): established Discord TCP sockets sampled with `Get-NetTCPConnection` had TUN local address `172.19.0.1`. Voice join succeeded (user-observed); UDP path inferred, not packet-captured. |
-| **Observed — fail-closed** | Per-second socket sampling during `stop` (25 s), `taskkill` crash (~4–5 s until SCM restart) and ~40 s physical network outage: 0 Discord TCP sockets outside the TUN. Socket-level observation, not packet capture; UDP and DNS not captured. |
-| **Observed — reboot** | Service enabled: service/tunnel up ~12 s after boot; Discord TCP via TUN after user opened it. No boot-window leak capture. |
-| **Observed — lifecycle/config** | `disable`/`start`, MSI install/upgrade/uninstall passed. After uninstall: 0 AURA provider filters/sublayer in `netsh wfp show filters/state`; IP addresses, DNS servers and routes identical to pre-install capture; `%ProgramData%\AuraSplitTR` (private key) removed. Invalid config rejected without changing the running profile, WFP policy or Discord TUN routing. |
-| **Not yet tested** | Packet-capture leaks (DNS/IPv6/UDP, boot window, browser/ECH); forced-failure MSI uninstall/upgrade rollback; repair/error paths; CPU measurement; native IPv6 hosts; other AV products; more than one machine. |
-| **Implemented, not live-tested** | Post-run-3 file picker, `VPN_CONNECTING` start-up grace and network-change probe. Run 3 status missed the ~40 s outage. |
+## Bilinen sınırlar
 
-Live-test bugs fixed:
+- **Tarayıcı Discord ve DNS best-effort'tur; fail-closed değildir (P0-F/P0-G açık).** Hizmet dururken tarayıcı bağlantıları ve açık metin DNS sorguları doğrudan çıkabilir; çalışan hizmet de tüm alan adlarını/şifreli DNS'i kapsamaz.
+- **Engine süreç kimliğini kaybederse bir Discord akışı doğrudan yönlendirilebilir (P0-D açık).** Tünelin bağlı olması izolasyon kanıtı değildir.
+- **Yeni bir Discord sürümü enrollment tamamlanmadan bağlanabilir:** kısa bir yarış penceresi vardır. Yardımcılar ve kurucular yalnızca manifestteki bilinen yollar ve kapasite sınırları içinde kapsanır; özel/Downloads/diğer Temp yolları için kalıcı engelleme güvencesi yoktur.
+- **Koruma açılmadan önce kurulmuş bağlantılar kalabilir.** Etkinleştirdikten veya sağlayıcı değiştirdikten sonra Discord'u sistem tepsisinden tamamen kapatıp yeniden açın; yalnız pencereyi kapatmak yeterli değildir.
+- **Çoklu ağ adaptörü:** sağlık durumuna göre çıkış failover'ı eklendi, **canlı test edilmedi**. İki adaptör açıkken İnternet/DNS kesilirse `aurasplit.exe stop` veya `aurasplit.exe disable` çalıştırın. `stop` kayıtlı programların engellerini tutar; `disable` engelleri kaldırır ve Discord doğrudan bağlanabilir.
+- **Test kapsamı:** tek Windows 11 x64 bilgisayar; test edilen sağlayıcılar WARP ve Proton. Genel WireGuard seçeneği yalnız Proton `.conf` ile denendi; diğer genel WireGuard sağlayıcıları canlı test edilmedi. Windows 10, yerel IPv6 ve diğer makineler/antivirüsler doğrulanmadı.
+- **Exe/MSI Authenticode imzasızdır; antivirüs/SmartScreen uyarabilir.** Antivirüsü asla kapatmayın veya istisna eklemeyin. SHA-256 ve `gh attestation verify` ile doğrulayın.
+- **Kapsamlı paket yakalamalı sızıntı testleri tamamlanmadı; bağımsız paket doğrulaması yoktur.** `tools/leaktest` mevcuttur. Eski run 5 sınırlı yakalamalar içerir ve tarayıcı/DNS kaçışını kaydeder; genel bir “sızıntı yok” sonucu değildir.
+- **Başka bir VPN istemcisinin tünelini aynı anda çalıştırmayın** (Proton/WARP uygulaması dahil).
 
-- IPv6-less host WireGuard bind: connection path corrected and re-verified live.
-- Browser IPv6 outage: host-aware TUN/DNS configuration corrected and re-verified live.
-- WARP host-name endpoint handshake: IP resolution corrected and re-verified live.
-- AV hold on self-install: moved to MSI; no AV alert/start-up hold observed in MSI runs on the same PC.
+Ayrıntılar: [ağ izolasyonu denetimi](audits/network_isolation_audit.md), [iyileştirme planı — P0 progress](audits/security_remediation_plan.md#p0-progress), [R3/R4 canlı kayıtları](testing/phase3_live_results_2026-11-22.md), [çoklu adaptör analizi](audits/r3_multinic_analysis.md). Deneysel yayın kararı bu açıkları veya planın güvenlik kabul kapısını kapatmaz.
 
-## Features (implemented; live validation limited to the scope above)
+### Known limitations
 
-- Routes only Discord traffic through a WireGuard tunnel (embedded sing-box
-  v1.14.4, gVisor TUN stack):
-  - Discord desktop app (`Discord.exe`, PTB, Canary), `Update.exe` and Discord
-    installers, by process;
-  - listed Discord domains from any process, including browsers.
-- Everything else (games, other sites and apps) uses the direct connection.
-- Providers: Cloudflare WARP (automatic registration; only the public key is
-  sent), Proton VPN WireGuard `.conf` (Free/Plus), any standard WireGuard `.conf`.
-- **Installed with a standard Windows Installer package**
-  `AuraSplitTR-0.1.0-beta-x64.msi` (per-machine, x64, built with WiX 5.0.2):
-  Windows Installer copies `aurasplit.exe` to `%ProgramFiles%\AuraSplitTR`,
-  registers the `AuraSplitTR` service (LocalSystem, manual start until
-  configured, depends on BFE, restart on failure) and adds the Start Menu entry
-  "AURA Split TR - Yapılandır". Uninstall via Settings > Apps removes the WFP
-  policy first (`recover --msi`), then the service, the files and
-  `%ProgramData%\AuraSplitTR` (profile with the private key). Upgrades keep the
-  profile; downgrades are refused. `aurasplit.exe` no longer copies itself or
-  creates a service. **MSI install/upgrade/uninstall passed live** in the scope
-  above; repair and forced-failure rollback paths remain **NOT TESTED** live.
-- Runs as a Windows service (`AuraSplitTR`), starts automatically at boot once
-  configured, no window or tray icon.
-- Turkish configuration wizard (`setup`, Start Menu shortcut; runs only from
-  the installed copy, checks that the service really reaches RUNNING and
-  explains a service stuck in START_PENDING); commands `status`, `start`,
-  `stop`, `restart`, `disable`, `recover`, `run [--debug]`, `version`.
-  `uninstall` now only explains how to uninstall through Windows.
-- Upgrading from a pre-release self-installing build: run that build's
-  `aurasplit.exe uninstall` first, then install the MSI.
-- If the tunnel cannot start, Discord traffic and Discord DNS are blocked
-  (not sent direct) while the service retries.
-- `status` reports service state and tunnel state separately.
-- Key material stored in an ACL-protected `%ProgramData%\AuraSplitTR\profile.json`
-  (SYSTEM + Administrators only); secrets are never logged.
-- Size-capped logs (2 MB + 2 backups, level `warn`, user names redacted).
-- Folder trust checks and quarantine instead of deletion for untrusted content.
-- No telemetry.
+- **Browser Discord and DNS are best-effort, not fail-closed (P0-F/P0-G open).** Browser connections and plaintext DNS can go direct while the service is stopped; running it does not cover every domain/encrypted-DNS path.
+- **Process-identity loss in the engine can route a Discord flow direct (P0-D open).** A connected tunnel does not prove isolation.
+- **A brand-new Discord version can connect before enrollment:** a short race remains. Helpers/installers are covered only within known manifest paths and capacity bounds; custom, Downloads and other Temp paths have no persistent-block assurance.
+- **Connections opened before protection can remain direct.** Fully quit Discord from the tray and restart it after enabling protection or changing providers.
+- **Multi-NIC:** health-aware egress failover was added but **has NOT been tested live**. If Internet/DNS breaks with two adapters, run `aurasplit.exe stop` or `aurasplit.exe disable`. `stop` retains enrolled-program blocks; `disable` removes them and lets Discord connect directly.
+- **Tested scope:** one Windows 11 x64 PC, WARP and Proton. The generic WireGuard option was exercised only with a Proton `.conf`; other generic WireGuard providers have not been tested live. Windows 10, native IPv6 and other PCs/antivirus products are unverified.
+- **Exe/MSI are unsigned; antivirus/SmartScreen may warn. Never disable antivirus or add exclusions.** Verify SHA-256 and `gh attestation verify`.
+- **No comprehensive packet-capture leak test suite has been completed; no independent packet verification.** `tools/leaktest` exists. Historical run 5 contains limited captures, including browser/DNS escapes; it does not establish leak-free operation.
+- **Do not run another VPN client's tunnel at the same time**, including the Proton/WARP app.
 
-## Known limitations
+See the [isolation audit](audits/network_isolation_audit.md), [remediation plan / P0 progress](audits/security_remediation_plan.md#p0-progress), [R3/R4 live results](testing/phase3_live_results_2026-11-22.md) and [multi-NIC analysis](audits/r3_multinic_analysis.md). Publishing an experimental beta does not close these findings or satisfy the plan's security acceptance gate.
 
-- **Fail-closed is limited; live evidence is TCP socket sampling only.** Persistent
-  Windows Filtering Platform filters (exercised on a real machine as above)
-  block the **discovered** Discord
-  desktop executables (`%LOCALAPPDATA%\Discord*\Update.exe` and every
-  installed `app-*\Discord*.exe`, all user profiles) outside the tunnel, also
-  at boot before the service starts, while it is stopped or crashed, and while
-  the tunnel is down. Fail-closed applies only to that discovered inventory.
-  Remaining windows:
-  - a new Discord version is added about 1 s after its directory/executable
-    appears (directory watcher; 60 s rescan as backstop; a failed watch is
-    retried with a 1 s to 60 s backoff). If it connects within that window
-    **while the tunnel is down**, it can go direct;
-  - a version staged while the service is stopped is not covered until the
-    service starts and rescans (`Update.exe` is blocked while stopped, so the
-    updater cannot download one then; a manually copied or just-downloaded
-    version can still fall in this window);
-  - Discord in a browser, Discord copies outside `%LOCALAPPDATA%\Discord*`
-    and installers are **not** covered by the WFP filters (they are
-    tunnelled by process/domain only while the service runs);
-  - while the service is stopped, Discord name lookups made by the Windows
-    DNS Client (Dnscache) can reach the ISP resolver in clear text (the
-    connections themselves are blocked);
-  - the policy is bounded (256 executables, 32 per profile, existing plus
-    new); beyond that new executables are not added and `status` reports
-    incomplete coverage; filters that WFP reports as disabled are not counted
-    as protection.
-  Stop/crash/physical-outage TCP observations passed; the remaining windows
-  above, UDP/DNS/IPv6 and boot-window packet-capture checks are not validated.
-  See [SECURITY.md](../SECURITY.md).
-- DNS protection covers the listed Discord domains only.
-- "Tunnel started" means the configuration was applied; the WireGuard
-  handshake is not verified.
-- May conflict with other VPN/TUN clients (Proton VPN app, WARP app, etc.).
-- Discord must be fully restarted after setup or provider changes.
-- Requires administrator rights.
-- **v0.1.0-beta binaries (exe and MSI) are NOT Authenticode-signed.** Windows
-  SmartScreen and antivirus products may warn. Verify each file's SHA-256 against
-  `SHA256SUMS.txt` and its GitHub build provenance attestation (see below).
-  Authenticode signing is planned for a later release.
-- **Antivirus false positives are possible.** The binary is an unsigned Go
-  executable that runs as a service, adds persistent WFP filters, creates a TUN
-  adapter (embedded Wintun DLL loaded from memory). In a live test on a Kaspersky-protected PC the former
-  self-installing setup was flagged by a behaviour detection and the new
-  service process was held in START_PENDING; MSI installation was subsequently
-  re-tested on that PC with no observed AV alert/start-up hold. Other AV products
-  remain untested; signing is still planned. Report false positives
-  to the AV vendor; never disable your AV or add exclusions.
-- The embedded upstream Wintun DLL contains its author's PDB build path.
-- Not a privacy/anonymity tool: only Discord traffic is tunnelled; the VPN
-  provider can see Discord connection metadata.
+## Kurulum ve doğrulama / Install and verify
 
-## Verification
-
-Official files are built by the manual release workflow from tag
-`v0.1.0-beta`:
-
-- `AuraSplitTR-0.1.0-beta-x64.msi` (the installer; MSI ProductVersion 0.1.0)
-- `aurasplit-0.1.0-beta-windows-amd64.zip` (exe + LICENSE, NOTICE,
-  THIRD_PARTY_LICENSES.md, TRADEMARKS.md, README.md, SECURITY.md)
-- `aurasplit.exe` (for verification and for `recover` if the installed copy
-  is lost; it refuses `setup` outside the MSI installation)
-- `SHA256SUMS.txt`
+[Releases](https://github.com/umut720s/aura-split-tr/releases) üzerinden MSI ve aynı sürümün `SHA256SUMS.txt` dosyasını indirin. Download the MSI and checksum file from the same release. In the download folder, use PowerShell:
 
 ```powershell
 (Get-FileHash .\AuraSplitTR-0.1.0-beta-x64.msi -Algorithm SHA256).Hash.ToLower()
 Get-Content .\SHA256SUMS.txt
-gh attestation verify AuraSplitTR-0.1.0-beta-x64.msi -R umut720s/aura-split-tr
-gh attestation verify aurasplit.exe -R umut720s/aura-split-tr
+gh attestation verify .\AuraSplitTR-0.1.0-beta-x64.msi --repo umut720s/aura-split-tr
 ```
 
-For each downloaded file, compare its SHA-256 with the matching entry in
-`SHA256SUMS.txt` and run `gh attestation verify <file> -R umut720s/aura-split-tr`
-(replace `<file>` with its path). Do not run a file if either verification fails.
+Hash'i MSI satırıyla karşılaştırın; iki doğrulamadan biri başarısızsa çalıştırmayın. Compare the hash with the matching MSI entry; do not run it if either check fails. Verify any separately downloaded exe/zip the same way. Checksums verify integrity; attestation verifies build provenance, not application safety. Neither provides Authenticode signing. **Antivirüsü kapatmayın / Never disable antivirus or add exclusions.** [Verification details](BUILD.md#verifying-a-downloaded-release).
 
-The published release includes `SHA256SUMS.txt` with the workflow-generated hashes.
+Doğrulanmış MSI'yi çalıştırın / Run the verified MSI:
 
-Reproduce the build: see docs/BUILD.md (same Go toolchain as `go.mod`). The
-exe is byte-reproducible; the MSI is not (new GUIDs/timestamps per build) —
-compare the exe inside it.
+```powershell
+msiexec /i .\AuraSplitTR-0.1.0-beta-x64.msi
+```
 
-## License
+Başlat menüsünden **“AURA Split TR - Yapılandır”** açıp sağlayıcı seçin. Hizmet yapılandırılana kadar başlamaz ve trafik engellemez. Diğer VPN tünellerini kapatın; `.conf` kopyaları özel anahtar içerir, paylaşmayın ve kurulumdan sonra silin. `status` kontrolünden sonra Discord'u tepsiden tamamen kapatıp yeniden açın.
 
-GPL-3.0-or-later. Third-party components and their licenses:
-THIRD_PARTY_LICENSES.md. Not affiliated with Discord, Proton, Cloudflare,
-WireGuard or sing-box (TRADEMARKS.md).
+Open **“AURA Split TR - Yapılandır”** from Start and select a provider. The service does not start/block traffic until configured. Disconnect other VPN tunnels, keep configs private and delete downloaded copies after setup. Check `status`, fully quit Discord from the tray and restart it. See [README](../README.md#english-summary) for provider setup.
 
-## Reporting problems
+## Kullanım ve kurtarma / Commands and recovery
 
-Bugs: GitHub issues (redact user names, IPs, never attach `.conf` or
-`profile.json`). Security issues: privately, see SECURITY.md.
+Yönetici PowerShell / Administrator PowerShell. These are alternatives; do not run them all in sequence:
+
+```powershell
+& "C:\Program Files\AuraSplitTR\aurasplit.exe" status
+& "C:\Program Files\AuraSplitTR\aurasplit.exe" stop
+& "C:\Program Files\AuraSplitTR\aurasplit.exe" disable
+& "C:\Program Files\AuraSplitTR\aurasplit.exe" recover
+```
+
+| Command | Etki / Effect |
+|---|---|
+| `status` | Hizmet/tünel/probe/kapsam / Inspect service, tunnel, probe and coverage; no packet-isolation proof. |
+| `stop` | Hizmet durur, engeller kalır / Stop service, keep persistent executable blocks and automatic startup setting. |
+| `disable` | Onayla devre dışı bırak / Confirm to disable startup, stop service and remove blocks; Discord can go direct. |
+| `recover` | Acil engel kaldırma / Attempt emergency WFP block removal without confirmation; disable/stop service if present. Works with a broken profile/missing service; successful removal allows direct traffic. |
+| `start` | Yeniden etkinleştir / Restore rules, automatic startup and service; fully restart Discord afterwards. |
+
+İki adaptörle İnternet kesilirse önce `stop` veya `disable` kullanın. If Internet breaks with two adapters, use `stop` or `disable`; the new failover has not been validated live.
+
+## Kaldırma / Uninstall
+
+**Windows Ayarlar → Uygulamalar → AURA Split TR → Kaldır / Settings → Apps → AURA Split TR → Uninstall.** Normal removal deletes the service, WFP rules, installed files and private-key data folder. Unexpected/untrusted contents or quarantine folders may remain for manual inspection; downloaded `.conf` files are not removed.
+
+Kaldırma bozulursa aynı sürümün MSI'sini doğrulayıp onarın/yeniden kurun, tam yoldan yönetici olarak `recover` çalıştırın, sonra Windows'tan kaldırmayı tekrar deneyin. If removal fails and blocks remain, verify and repair/reinstall the same MSI version, run full-path `recover` as administrator, then retry uninstall. Forced-failure rollback/repair/recovery error paths have not been tested live.
+
+[Private vulnerability reporting](../SECURITY.md) · [License](../LICENSE) · [Third-party licenses](../THIRD_PARTY_LICENSES.md). Do not attach configs, private keys, profiles or unredacted logs to reports.

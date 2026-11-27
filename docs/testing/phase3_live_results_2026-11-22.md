@@ -203,3 +203,12 @@ Ethernet (metric 25) and Wi-Fi (metric 55) both connected with Internet connecti
 | R4-4 | Multi-NIC diagnostics | Evidence | sing-tun default interface = Ethernet; direct, wg-direct and local DNS auto-bind to Ethernet; bound DNS queries via Ethernet OK; a query bound to Wi-Fi's on-link DNS server timed out while the same server via auto-egress (Ethernet) worked. |
 
 **Interpretation (assumption, not proven):** AURA pins all direct traffic and its local DNS to the single lowest-metric interface; with strict_route, Windows' own multi-adapter DNS fallback is unavailable. During R3 Windows reported Ethernet "NoTraffic" — if the selected interface is up but not passing traffic, AURA has no failover and all resolution fails, while stopping AURA lets Windows fall back to Wi-Fi. Proposed fix: health-aware egress selection (fail over to another default-route interface when probes on the selected one fail), plus a status warning. Needs a reproducible "selected NIC up but dead" test (e.g. unplug the Ethernet uplink at the switch while the NIC stays up).
+
+## Live run R5 (2026-11-27 23:01, commit aaec3fd) — release smoke test
+
+| ID | Scenario | Result | Evidence / notes |
+|---|---|---|---|
+| R5-1 | MSI upgrade with failover build, 2 NICs up | PASS (socket-level) | exit 0; DNS 3/3, https 200, WARP verified; status shows egress "Ethernet (automatic)", health TCP=true DNS=true; Turkish text renders correctly. |
+| R5-2 | Old-flow gate with Discord open before upgrade | PASS | 8 pre-protection Discord processes reported, readiness NO with restart guidance. |
+| R5-3 | After full Discord quit + reopen | PASS (socket-level) | PROTECTION_READY = YES, OLD_FLOW_GATE complete; desktop/updater/helpers "protected" (4 ALE layers read back); 3/3 established Discord TCP sockets on the TUN. Packet isolation not measured. |
+| — | "Selected NIC up but dead" failover | NOT TESTED | Known limitation for v0.1.0-beta. |
