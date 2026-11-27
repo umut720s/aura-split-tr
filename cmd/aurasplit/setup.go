@@ -44,11 +44,12 @@ var setupStartTimeout = 30 * time.Second
 // first, unelevated, so a downloaded copy never asks for administrator
 // rights at all.
 func cmdSetup(elevated bool) int {
+	if !inputAllowed() {
+		inputGuidance()
+		return exitNeedsInput
+	}
 	if ok, err := runningFromInstalled(); !ok {
 		printNotInstalled(err)
-		if !elevated {
-			waitEnter()
-		}
 		return 1
 	}
 	if !service.IsAdmin() {
@@ -59,18 +60,13 @@ func cmdSetup(elevated bool) int {
 		fmt.Println("Yapılandırma yönetici izni gerektiriyor; izin isteniyor...")
 		if err := relaunchElevated([]string{"setup"}); err != nil {
 			fail("Yönetici olarak yeniden başlatılamadı.", err)
-			waitEnter()
 			return 1
 		}
+		setupRelaunched = true
 		return 0
 	}
 
-	code := runSetup()
-	if !elevated {
-		// Elevated runs wait in main(); avoid asking twice.
-		waitEnter()
-	}
-	return code
+	return runSetup()
 }
 
 // runningFromInstalled reports whether this process runs from
@@ -331,6 +327,10 @@ func printBlockedHint() {
 // obtained or the user gives up.
 func chooseProvider() (profile.WireGuard, string, bool) {
 	for {
+		if !inputAllowed() {
+			inputGuidance()
+			return profile.WireGuard{}, "", false
+		}
 		fmt.Println("VPN sağlayıcısını seçin:")
 		fmt.Println("  [1] Cloudflare WARP  (ücretsiz, hesap gerekmez)")
 		fmt.Println("  [2] Proton VPN       (Free veya Plus; WireGuard yapılandırma dosyası ile)")

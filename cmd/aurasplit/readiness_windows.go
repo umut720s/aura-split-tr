@@ -17,18 +17,26 @@ func protectionReady(ts tunnelState) bool {
 	return ts.State == string(engine.StateTunnelStarted) && p != nil && p.Ready && p.Applied && p.Complete && !p.PendingEnrollment && !p.PendingPermitClosure && p.Permit && p.PermitComplete && p.OldFlowsComplete && p.Error == ""
 }
 
+var startupProcesses = func(entries []string) ([]oldflow.Process, error) {
+	return (oldflow.WindowsSource{Manifest: entries}).Processes()
+}
+
 // finishProtectionStart waits for a fresh service-owned contract, not SCM RUNNING.
 // Only this interactive path may request consent to terminate Discord processes.
 func finishProtectionStart(timeout time.Duration) int {
 	fmt.Println("Eski IPv6 TCP/UDP akışları kalabilir. Sistem tepsisinden Discord'dan tamamen çıkın; kapı tamamlandıktan sonra yeniden açın.")
 	manifest, err := discoverDiscord()
 	if err == nil && len(manifest) > 0 {
-		procs, perr := (oldflow.WindowsSource{Manifest: manifest}).Processes()
+		procs, perr := startupProcesses(manifest)
 		pending := perr != nil
 		for _, p := range procs {
 			pending = pending || oldflow.Matches(p.Image, manifest)
 		}
-		if pending && strings.EqualFold(strings.TrimSpace(readLine("Discord süreçleri kapatılsın mı? Kaydedilmemiş işler kaybolabilir. [y/N]: ")), "y") {
+		if pending && !inputAllowed() {
+			inputGuidance()
+			return exitNeedsInput
+		}
+		if pending && strings.EqualFold(strings.TrimSpace(readLine("Discord süreçleri kapatılsın mı? Kaydedilmemiş işler kaybolabilir. [y/N]: ")), "y") && inputAllowed() {
 			if err := oldflow.CloseConsented(manifest); err != nil {
 				fail("Discord süreçleri tamamen kapatılamadı; koruma kapısı bekliyor.", err)
 			}
@@ -49,5 +57,9 @@ func finishProtectionStart(timeout time.Duration) int {
 		time.Sleep(250 * time.Millisecond)
 	}
 	fmt.Println("PROTECTION_READY: HAYIR — koruma tamamlanmadı; mevcut bloklar korunuyor, hizmet yeniden deneyecek. Ayrıntı: aurasplit.exe status")
+	if !inputAllowed() {
+		inputGuidance()
+		return exitNeedsInput
+	}
 	return 1
 }

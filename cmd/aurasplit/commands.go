@@ -326,6 +326,10 @@ func cmdRestart() int {
 // cmdDisable stops the service, keeps it from starting at boot and
 // removes the WFP policy: Discord then uses the direct connection.
 func cmdDisable() int {
+	if !inputAllowed() {
+		inputGuidance()
+		return exitNeedsInput
+	}
 	fmt.Println("UYARI: Bu komut AURA Split TR'yi devre dışı bırakır:")
 	fmt.Println("  - hizmet durdurulur ve bilgisayar açılışında başlamaz,")
 	fmt.Println("  - kalıcı Discord engelleme kuralları (WFP) kaldırılır,")

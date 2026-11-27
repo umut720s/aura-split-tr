@@ -26,7 +26,7 @@ func TestGateRetirement(t *testing.T) {
 		reason string
 	}{
 		{[]Process{{PID: 1, Image: exe, Started: old}}, false, "koruma öncesi"},
-		{[]Process{{PID: 3, ParentPID: 1, Name: "opaque.exe", Unresolved: true}}, false, "okunamadı"},
+		{[]Process{{PID: 3, ParentPID: 1, Name: "opaque.exe", Unresolved: true}}, true, "tamamlandı"},
 		{[]Process{{PID: 1, Image: exe, Started: old}}, false, "koruma öncesi"},
 		{[]Process{{PID: 2, ParentPID: 1, Name: "opaque.exe", Unresolved: true}, {PID: 1, Image: exe, Started: old}}, false, "okunamadı"},
 		{[]Process{{PID: 2, Name: "opaque.exe", Unresolved: true}}, false, "okunamadı"},
@@ -53,38 +53,78 @@ func TestGateRetirement(t *testing.T) {
 	}
 }
 
-func TestUnfamiliarOrphanLifetimeAndResolution(t *testing.T) {
+func TestUnfamiliarOrphanDoesNotBlock(t *testing.T) {
 	exe := `C:\Users\fixture\AppData\Local\Discord\app-1\Discord.exe`
 	g := &Gate{}
-	old := time.Now().Add(-time.Hour)
-	orphan := Process{PID: 42, ParentPID: 41, Name: "opaque.exe", Started: old, Unresolved: true}
-	if ok, why := g.Check(fakeSource{procs: []Process{orphan}}, []string{exe}); ok || !strings.Contains(why, "PID 42 (opaque.exe)") {
-		t.Fatal(ok, why)
-	}
-	// An orphan suspicion is not permanent relevance once ancestry is resolved.
-	parent := Process{PID: 41, Image: `C:\Other\parent.exe`, Started: old.Add(-time.Minute)}
-	if ok, why := g.Check(fakeSource{procs: []Process{orphan, parent}}, []string{exe}); !ok {
-		t.Fatal(why)
-	}
-	if ok, why := g.Check(fakeSource{procs: []Process{orphan}}, []string{exe}); ok {
-		t.Fatal("unresolved pre-cutoff orphan ignored", why)
-	}
-	if ok, why := g.Check(fakeSource{}, []string{exe}); !ok {
-		t.Fatal("exited orphan still pending", why)
-	}
-	// Resolving the same identity as unrelated releases it immediately.
-	resolved := orphan
-	resolved.Image = `C:\Other\utility.exe`
-	resolved.Unresolved = false
-	if ok, why := g.Check(fakeSource{procs: []Process{resolved}}, []string{exe}); !ok {
-		t.Fatal(why)
-	}
-	// The orphan rule is independently re-evaluated; post-cutoff orphans do not block.
-	orphan.Started = time.Now().Add(time.Hour)
+	orphan := Process{PID: 42, ParentPID: 41, Name: "Discord_helper.exe", Unresolved: true}
 	if ok, why := g.Check(fakeSource{procs: []Process{orphan}}, []string{exe}); !ok {
 		t.Fatal(why)
 	}
-	if ok, why := g.Check(fakeSource{}, []string{exe}); !ok {
+}
+
+func TestProtectedAndSessionZeroProcesses(t *testing.T) {
+	exe := `C:\Users\fixture\AppData\Local\Discord\app-1\Discord.exe`
+	old := time.Now().Add(-time.Hour)
+	for _, name := range []string{"Secure System", "Registry", "Memory Compression", "System", "csrss.exe", "smss.exe", "wininit.exe", "services.exe", "lsass.exe"} {
+		p := Process{PID: 42, ParentPID: 1, Name: name, Image: exe, Started: old, Unresolved: true}
+		g := &Gate{}
+		// Even a forged manifest image must never make a protected process relevant.
+		if ok, why := g.Check(fakeSource{procs: []Process{p}}, []string{exe}); !ok {
+			t.Fatal(name, why)
+		}
+	}
+	for _, pid := range []uint32{0, 4} {
+		if ok, why := (&Gate{}).Check(fakeSource{procs: []Process{{PID: pid, Image: exe, Unresolved: true}}}, []string{exe}); !ok {
+			t.Fatal(why)
+		}
+	}
+	p := Process{PID: 42, Name: "opaque.exe", Image: exe, Started: old, SessionKnown: true}
+	if ok, why := (&Gate{}).Check(fakeSource{procs: []Process{p}}, []string{exe}); ok {
+		t.Fatal(why)
+	}
+	p.Started = time.Now().Add(time.Hour)
+	if ok, why := (&Gate{}).Check(fakeSource{procs: []Process{p}}, []string{exe}); !ok {
+		t.Fatal(why)
+	}
+	p.Started = old
+	// Session zero descendants remain relevant, independent of snapshot order.
+	p.Image, p.Unresolved, p.ParentPID = "", true, 1
+	parent := Process{PID: 1, Image: exe, Started: old.Add(-time.Minute), SessionKnown: true, SessionID: 1}
+	if ok, why := (&Gate{}).Check(fakeSource{procs: []Process{p, parent}}, []string{exe}); ok || !strings.Contains(why, "PID 42") {
+		t.Fatal(why)
+	}
+}
+
+func TestUnresolvedManifestNamesWithoutAncestry(t *testing.T) {
+	exe := `C:\AppData\Local\Discord\app-1\Discord.exe`
+	for _, name := range []string{"Discord.exe", "DISCORDPTB.EXE", "DiscordCanary.exe", "DiscordDevelopment.exe", "Update.exe", "DiscordSetup.exe", "updater_launcher.exe", "DiscordSystemHelper.exe", "audio_effects_helper.exe", "gpu_encoder_helper.exe"} {
+		t.Run(name, func(t *testing.T) {
+			for _, session := range []uint32{0, 1} {
+				p := Process{PID: 42, ParentPID: 99, Name: name, Unresolved: true, SessionKnown: true, SessionID: session}
+				g := &Gate{}
+				if ok, why := g.Check(fakeSource{procs: []Process{p}}, []string{exe}); ok || !strings.Contains(why, "okunamadı") {
+					t.Fatal(why)
+				}
+				p.Image, p.Started, p.Unresolved = `C:\Other\unrelated.exe`, time.Now().Add(-time.Hour), false
+				if ok, why := g.Check(fakeSource{procs: []Process{p}}, []string{exe}); !ok {
+					t.Fatal(why)
+				}
+			}
+		})
+	}
+}
+
+func TestRememberedManifestImageAndReuse(t *testing.T) {
+	exe := `C:\Users\fixture\AppData\Local\Discord\app-1\Discord.exe`
+	p := Process{PID: 42, Image: exe, Started: time.Now().Add(-time.Hour)}
+	g := &Gate{}
+	g.Check(fakeSource{procs: []Process{p}}, []string{exe})
+	p.Image, p.Unresolved = "", true
+	if ok, why := g.Check(fakeSource{procs: []Process{p}}, []string{exe}); ok {
+		t.Fatal(why)
+	}
+	p.Started = p.Started.Add(time.Minute)
+	if ok, why := g.Check(fakeSource{procs: []Process{p}}, []string{exe}); !ok {
 		t.Fatal(why)
 	}
 }

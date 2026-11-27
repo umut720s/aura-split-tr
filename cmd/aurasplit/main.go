@@ -42,28 +42,39 @@ func checkMSIFlag(cmd string) error {
 	return fmt.Errorf("%s yalnızca recover, start ve uninstall ile kullanılabilir", msiFlag)
 }
 
-func main() {
+func main() { os.Exit(runMain()) }
+
+var setupRelaunched bool
+
+func runMain() int {
 	args, elevated := splitArgs(os.Args[1:])
 	args, debug := takeFlag(args, debugFlag)
 	args, msi := takeFlag(args, msiFlag)
 	args, saveState := takeFlag(args, "--save-state")
+	suppressInput = msi
+	setupCommand := len(args) == 0 || strings.EqualFold(args[0], "setup") || strings.EqualFold(args[0], "kurulum")
+	defer func() {
+		if holdConsole(setupCommand, elevated, msi, setupRelaunched, len(args) > 0 && args[0] == "service") {
+			waitEnter()
+		}
+	}()
 	if saveState && (!msi || len(args) != 1 || (args[0] != "recover" && args[0] != "kurtar")) {
 		fmt.Fprintln(os.Stderr, "--save-state yalnızca recover --msi ile kullanılabilir.")
-		os.Exit(2)
+		return 2
 	}
 	if msi {
 		cmd := ""
 		if len(args) > 0 {
 			cmd = strings.ToLower(args[0])
 		}
-		os.Exit(runMSI(cmd, saveState))
+		return runMSI(cmd, saveState)
 	}
 
 	if len(args) == 0 {
 		// The Service Control Manager normally passes "service", but be
 		// defensive in case the binary is started by the SCM without args.
 		if isSvc, err := service.IsWindowsService(); err == nil && isSvc {
-			os.Exit(cmdService())
+			return cmdService()
 		}
 		args = []string{"setup"}
 	}
@@ -123,10 +134,11 @@ func main() {
 		code = 2
 	}
 
-	if elevated && cmd != "service" {
-		waitEnter()
-	}
-	os.Exit(code)
+	return code
+}
+
+func holdConsole(setup, elevated, msi, relaunched, service bool) bool {
+	return !msi && !service && !relaunched && (setup || elevated)
 }
 
 // splitArgs removes internal flags from the argument list.
@@ -157,6 +169,7 @@ func takeFlag(in []string, flag string) (args []string, found bool) {
 // elevated token (the custom actions run as LocalSystem) and never
 // prompts.
 func runMSI(cmd string, saveState bool) int {
+	suppressInput = true
 	if err := checkMSIFlag(cmd); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
@@ -191,6 +204,10 @@ func withAdmin(args []string, elevated bool, fn func() int) int {
 		// We were already relaunched but still have no admin token.
 		failMsg("Bu komut yönetici izni gerektiriyor ve izin alınamadı.")
 		return 1
+	}
+	if !inputAllowed() {
+		inputGuidance()
+		return exitNeedsInput
 	}
 	fmt.Println("Bu komut yönetici izni gerektiriyor; izin isteniyor...")
 	if err := relaunchElevated(args); err != nil {

@@ -123,10 +123,13 @@ type runner interface {
 }
 
 type instance struct {
-	p      *profile.Profile
-	box    *box.Box
-	cancel context.CancelFunc
-	env    netEnv
+	p          *profile.Profile
+	box        *box.Box
+	cancel     context.CancelFunc
+	env        netEnv
+	pump       *logPump
+	diagCancel context.CancelFunc
+	diagDone   chan struct{}
 }
 
 // builtHostIPv6 is the host IPv6 capability the instance was built for.
@@ -146,10 +149,15 @@ func (i *instance) Start() error {
 		}
 		return startErr
 	}
+	i.startNICDiagnostics()
 	return nil
 }
 
 func (i *instance) Close() error {
+	if i.diagCancel != nil {
+		i.diagCancel()
+		<-i.diagDone
+	}
 	err := i.box.Close()
 	i.cancel()
 	return redact(i.p, err)
@@ -262,7 +270,7 @@ var prepareBox = func(p *profile.Profile, mode Mode, level string, pump *logPump
 		cancel()
 		return nil, err
 	}
-	return &instance{p: p, box: b, cancel: cancel, env: env}, nil
+	return &instance{p: p, box: b, cancel: cancel, env: env, pump: pump}, nil
 }
 
 func startBox(p *profile.Profile, mode Mode, level string, pump *logPump) (runner, error) {

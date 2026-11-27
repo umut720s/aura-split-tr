@@ -9,12 +9,14 @@ import (
 )
 
 type Process struct {
-	PID        uint32
-	ParentPID  uint32
-	Name       string
-	Image      string
-	Started    time.Time
-	Unresolved bool
+	PID          uint32
+	ParentPID    uint32
+	Name         string
+	Image        string
+	Started      time.Time
+	Unresolved   bool
+	SessionID    uint32
+	SessionKnown bool
 }
 
 type Source interface{ Processes() ([]Process, error) }
@@ -73,7 +75,7 @@ func (g *Gate) Check(s Source, entries []string) (bool, string) {
 	}
 	for _, p := range procs {
 		unresolved := p.Unresolved || p.Image == "" || p.Started.IsZero()
-		if manifest.Accepts(p.Image) || (unresolved && g.relevant[id(p)]) || heuristic(p.Name) || heuristic(p.Image) {
+		if !systemProcess(p) && (manifest.Accepts(p.Image) || (unresolved && (candidateName(p.Name) || g.relevant[id(p)]))) {
 			relevant[id(p)] = true
 		}
 	}
@@ -83,7 +85,7 @@ func (g *Gate) Check(s Source, entries []string) (bool, string) {
 		for _, p := range procs {
 			parent, exists := current[p.ParentPID]
 			// A recycled parent PID is not evidence of ancestry.
-			if exists && (parent.Started.IsZero() || p.Started.IsZero() || !parent.Started.After(p.Started)) && relevant[id(parent)] && !relevant[id(p)] {
+			if !systemProcess(p) && exists && p.PID != parent.PID && (parent.Started.IsZero() || p.Started.IsZero() || !parent.Started.After(p.Started)) && relevant[id(parent)] && !relevant[id(p)] {
 				relevant[id(p)] = true
 				changed = true
 			}
@@ -92,26 +94,10 @@ func (g *Gate) Check(s Source, entries []string) (bool, string) {
 	pending, unresolved := 0, 0
 	var blockers []string
 	for _, p := range procs {
-		// An unreadable pre-enrollment orphan may be an unfamiliar Discord
-		// child. No PID-only history is used when its parent has disappeared.
-		unknownChain := false
-		seen := map[uint32]bool{p.PID: true}
-		child := p
-		for child.ParentPID != 0 {
-			parent, exists := current[child.ParentPID]
-			if !exists || seen[parent.PID] || parent.Image == "" || parent.Unresolved || parent.Started.IsZero() || child.Started.IsZero() || parent.Started.After(child.Started) {
-				unknownChain = true
-				break
-			}
-			seen[parent.PID] = true
-			child = parent
+		if !relevant[id(p)] {
+			continue
 		}
-		before := p.Started.IsZero()
-		for _, cutoff := range g.cutoffs {
-			before = before || !p.Started.After(cutoff)
-		}
-		possibleOrphan := p.Image == "" && before && unknownChain
-		if (relevant[id(p)] || possibleOrphan) && (p.Unresolved || p.Image == "" || p.Started.IsZero()) {
+		if p.Unresolved || p.Image == "" || p.Started.IsZero() {
 			unresolved++
 			blockers = append(blockers, fmt.Sprintf("PID %d (%s)", p.PID, p.Name))
 			continue
@@ -138,7 +124,35 @@ func (g *Gate) Check(s Source, entries []string) (bool, string) {
 	return true, "Koruma öncesi manifest süreçleri kalmadı; eski akış kapısı tamamlandı."
 }
 
-func heuristic(s string) bool {
-	s = strings.ToLower(s)
-	return strings.Contains(s, "discord") || strings.HasSuffix(s, "update.exe") || strings.HasSuffix(s, "updater_launcher.exe") || strings.HasSuffix(s, "_helper.exe")
+// Test the basename through the shared manifest contract, without granting an
+// unresolved name the authority of a verified image path.
+func candidateName(name string) bool {
+	if name == "" || strings.ContainsAny(name, `\/`) {
+		return false
+	}
+	for _, root := range manifest.Roots() {
+		for _, dir := range []string{`C:\AppData\Local\` + root + `\`, `C:\AppData\Local\` + root + `\app-fixture\`} {
+			if manifest.Accepts(dir + name) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func systemProcess(p Process) bool {
+	if p.PID == 0 || p.PID == 4 {
+		return true
+	}
+	for _, name := range []string{p.Name, p.Image} {
+		name = strings.ToLower(name)
+		if n := strings.LastIndexAny(name, `\/`); n >= 0 {
+			name = name[n+1:]
+		}
+		switch name {
+		case "secure system", "registry", "memory compression", "system", "csrss.exe", "smss.exe", "wininit.exe", "services.exe", "lsass.exe":
+			return true
+		}
+	}
+	return false
 }

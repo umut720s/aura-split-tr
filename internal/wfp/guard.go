@@ -201,7 +201,7 @@ func (g *Guard) statusLocked() Status {
 	st.OldFlowsComplete, st.OldFlowsReason = g.oldFlowsComplete, g.oldFlowsReason
 	st.PendingEnrollment = !st.Complete
 	st.Ready = st.Complete && st.PermitComplete && st.OldFlowsComplete && st.Err == "" && len(canonicalPaths(g.inventory)) > 0
-	reason := "Koruma hazÄ±r deÄŸil: kalÄ±cÄ± kapsam, tÃ¼nel izni veya eski akÄ±ÅŸ kapÄ±sÄ± bekleniyor."
+	reason := "Koruma hazır değil: kalıcı kapsam, tünel izni veya eski akış kapısı bekleniyor."
 	if st.PendingPermitClosure {
 		reason += " Legacy permit session closure pending; retrying."
 	}
@@ -417,10 +417,10 @@ func (g *Guard) Reconcile() error {
 			len(inc.OverBudget), MaxPolicyApps, MaxPolicyAppsPerProfile))
 	}
 	if err := VerifyPolicy(g.policy, normalizePaths(append(append([]string(nil), want...), res.Covered...))); err != nil {
-		reasons = append(reasons, "KalÄ±cÄ± politikanÄ±n dÃ¶rt ALE katmanÄ± okunamadÄ±: "+err.Error())
+		reasons = append(reasons, "Kalıcı politikanın dört ALE katmanı okunamadı: "+err.Error())
 	}
 	if len(want) == 0 {
-		reasons = append(reasons, "Executable manifesti boÅŸ")
+		reasons = append(reasons, "Executable manifesti boş")
 	}
 	g.complete = len(reasons) == 0
 	if !g.complete {
@@ -459,13 +459,13 @@ func (h *permitHandle) Close() error {
 // the returned handle closes the permit.
 func (g *Guard) TunnelUp(luid uint64) (io.Closer, error) {
 	if luid == 0 {
-		g.ReportFailure("AURA TUN LUID sÄ±fÄ±r; koruma hazÄ±r deÄŸil")
+		g.ReportFailure("AURA TUN LUID sıfır; koruma hazır değil")
 		return nil, errors.New("wfp: tunnel interface LUID is zero")
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if !g.applied || !g.complete {
-		g.lastErr = "KalÄ±cÄ± politika ve dÃ¶rt ALE katmanÄ± readback tamamlanmadÄ±; yeniden deneniyor"
+		g.lastErr = "Kalıcı politika ve dört ALE katmanı readback tamamlanmadı; yeniden deneniyor"
 		g.notifyLocked()
 		return nil, errors.New(g.lastErr)
 	}

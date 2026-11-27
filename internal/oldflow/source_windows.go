@@ -33,6 +33,7 @@ func (s WindowsSource) Processes() ([]Process, error) {
 	for err == nil {
 		if e.ProcessID != 0 {
 			item := Process{PID: e.ProcessID, ParentPID: e.ParentProcessID, Name: windows.UTF16ToString(e.ExeFile[:])}
+			item.SessionKnown = windows.ProcessIdToSessionId(e.ProcessID, &item.SessionID) == nil
 			p, pe := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, e.ProcessID)
 			if pe == nil {
 				item.Image, pe = imageOf(p)

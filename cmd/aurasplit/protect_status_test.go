@@ -10,10 +10,43 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"aurasplit/internal/engine"
 	"aurasplit/internal/wfp"
 )
+
+func TestTurkishStatusJSONRoundTrip(t *testing.T) {
+	exe := `C:\Users\fixture\AppData\Local\Discord\app-1\Discord.exe`
+	g := wfp.NewGuard(&fakeCmdPolicy{}, func() ([]string, error) { return []string{exe}, nil }, nil, nil)
+	if err := g.Reconcile(); err != nil {
+		t.Fatal(err)
+	}
+	w := &stateWriter{}
+	w.setProtection(g.Status())
+	w.cur.State = string(engine.StateTunnelStarted)
+	data, err := json.Marshal(w.cur)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ts tunnelState
+	if err := json.Unmarshal(data, &ts); err != nil {
+		t.Fatal(err)
+	}
+	out := strings.Join(describeStatus(statusInput{scmRunning: true, state: &ts}, time.UTC), "\n")
+	if !utf8.ValidString(out) || !strings.Contains(out, "Koruma hazır değil: kalıcı kapsam, tünel izni veya eski akış kapısı bekleniyor.") {
+		t.Fatal(out)
+	}
+	for _, bad := range []string{"Ã", "Ä", "Å", "├", "�"} {
+		if strings.Contains(out, bad) {
+			t.Fatal(out)
+		}
+	}
+	// A byte limit must not split a Turkish code point before JSON encoding.
+	if got := scrubDetail(strings.Repeat("a", maxStateDetail-1) + "ğx"); !utf8.ValidString(got) || strings.Contains(got, "�") {
+		t.Fatal(got)
+	}
+}
 
 // fakeCmdPolicy stands in for WFP: no real WFP call is made by these tests.
 type fakeCmdPolicy struct {

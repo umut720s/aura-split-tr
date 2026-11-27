@@ -65,19 +65,31 @@ func ProfileDirs() ([]string, error) {
 		}
 		v, _, err := sk.GetStringValue("ProfileImagePath")
 		sk.Close()
-		if err != nil || v == "" {
-			continue
-		}
-		if x, err := registry.ExpandString(v); err == nil {
-			v = x
-		}
-		v = filepath.Clean(v)
-		if !filepath.IsAbs(v) {
+		v, err = profileDirectory(v, err, registry.ExpandString)
+		if err != nil {
+			errs = append(errs, err)
 			continue
 		}
 		out = append(out, v)
 	}
 	return out, errors.Join(errs...)
+}
+
+// An unreadable profile is an incomplete inventory, never proof of removal.
+// Errors intentionally omit the registry value (it contains a user path).
+func profileDirectory(value string, readErr error, expand func(string) (string, error)) (string, error) {
+	if readErr != nil || value == "" {
+		return "", errors.New("profil listesi: ProfileImagePath okunamadı veya boş")
+	}
+	v, err := expand(value)
+	if err != nil {
+		return "", errors.New("profil listesi: ProfileImagePath genişletilemedi")
+	}
+	v = filepath.Clean(v)
+	if !filepath.IsAbs(v) {
+		return "", errors.New("profil listesi: ProfileImagePath mutlak bir yol değil")
+	}
+	return v, nil
 }
 
 // Discover returns the Discord executables of every user profile. A

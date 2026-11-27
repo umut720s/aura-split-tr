@@ -168,3 +168,25 @@ Conclusions: with the service running, no Discord names were visible on the phys
 | S14 | `msiexec /x` with the new `auraclean.exe` data-cleanup helper | PASS | exit 0; custom actions in order (save state -> recover -> AuraCleanData via auraclean `uninstall --msi`); service, install dir, Start Menu entry, TUN adapter and `%ProgramData%\AuraSplitTR` (private key) removed; 0 AURA WFP provider filters / sublayer. |
 | S1 + S3 | Reinstall + reconfigure Proton via the file picker | PASS | Service running, VPN verified 11 s after start, protection complete. |
 | obs. | Pre-existing Discord connection after enabling protection | Observed limitation | One Discord TCP socket opened at 22:06:09 (while AURA was uninstalled) stayed on the physical NIC after protection was enabled at 22:07:15; new sockets used the TUN. WFP authorizes new connections only. After the user restarted Discord: 6/6 sockets via TUN. Matches the existing instruction to fully restart Discord after setup. Possible improvement: close Discord's off-TUN TCP connections when protection is enabled. |
+
+## Live run R3 (2026-11-27, commit cab9827, MSI d1ed59da…; Kaspersky Plus active)
+
+Environment change vs. earlier runs: **two physical NICs up on the same subnet** (Ethernet 192.168.1.x metric 25, Wi-Fi 192.168.1.x metric 55, both with a default route to the same gateway; NCSI: Ethernet "NoTraffic", Wi-Fi "Internet"); Ethernet DNS set to 1.1.1.1/1.0.0.1, Wi-Fi DNS = router; Proton VPN app running but **not** connected; two NRPT rules for Microsoft update hosts (not created by AURA).
+
+| ID | Scenario | Result | Evidence / notes |
+|---|---|---|---|
+| R3-1 | Fresh MSI install | PASS | exit 0; service manual/stopped; new per-class `status` shows every class not-covered before setup; browser/DNS labelled best-effort. |
+| R3-2 | Setup with Discord already running (P0-C) | **FAIL (bug)** | Policy applied: **9 programs** enrolled incl. helpers (P0-E works). Old-flow gate stuck pending on unreadable **system** processes (Secure System, Registry, Memory Compression) treated as "possible Discord" → readiness can never become true. Setup console window closed by itself, so the user could not read the prompt/consent. |
+| R3-3 | Status text | **FAIL (bug)** | Some per-class lines are double-encoded (mojibake, e.g. "haz├ä┬▒r de├ä┼©il") while others render correctly. |
+| R3-4 | Non-Discord traffic while AURA runs | **FAIL (critical, environment-dependent)** | With AURA running, **all name resolution on the PC failed** ("remote name could not be resolved" for google/youtube/example); sing-box direct dials timed out (incl. a Proton API address); WARP stayed VPN_CONNECTING. `aurasplit stop` restored DNS/internet immediately. Leading hypothesis: multi-NIC same-subnet default-interface selection / local DNS path in sing-box(auto_detect_interface) or strict_route DNS blocking with two egress NICs. Not yet confirmed; Proton app running (disconnected) not excluded. |
+
+Follow-up: reproduce with Wi-Fi disabled vs. enabled (user-controlled) to confirm the multi-NIC hypothesis; fix gate false-pending on protected system processes; keep the setup console open; fix double encoding.
+
+### R3 follow-up — Wi-Fi disabled (Ethernet only), same session
+
+| ID | Scenario | Result | Evidence / notes |
+|---|---|---|---|
+| R3-5 | AURA running, only Ethernet up | PASS (socket-level) | Name resolution OK (google/example/discord), https google 200 / youtube 200; WARP `VPN_CONNECTIVITY_VERIFIED` 18 s after start. Strongly supports R3-4 being a **multi-NIC (two egress NICs on the same subnet)** defect. Root cause still to be found. |
+| R3-6 | `start` run non-interactively | **FAIL (bug)** | `aurasplit start` printed the old-flow gate guidance and then blocked waiting for a console answer (consent prompt) in a hidden elevated process; it must not prompt when non-interactive. |
+| R3-7 | Enrolled program count | Observation | 9 programs at setup (21:34), 6 at the later start (21:41) — cause not yet explained (manifest/discovery drift?). |
+| R3-8 | `disable` | PASS | Service stopped + Disabled, persistent WFP policy removed, status shows no policy. |

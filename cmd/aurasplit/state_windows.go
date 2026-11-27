@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/sys/windows"
 
@@ -88,7 +89,11 @@ func scrubDetail(s string) string {
 	s = userPathRe.ReplaceAllString(s, `${1}<user>`)
 	s = strings.NewReplacer("\r", " ", "\n", " ").Replace(s)
 	if len(s) > maxStateDetail {
-		s = s[:maxStateDetail] + "…"
+		n := maxStateDetail
+		for n > 0 && !utf8.RuneStart(s[n]) {
+			n--
+		}
+		s = s[:n] + "…"
 	}
 	return s
 }
