@@ -15,6 +15,10 @@ import (
 // table and the state of every interface that appears in them, then applies
 // decideHostIPv6. Only read-only IP helper calls are used.
 func detectHostIPv6() (bool, error) {
+	return detectHostIPv6On(0)
+}
+
+func detectHostIPv6On(index int) (bool, error) {
 	v4routes, err := readRoutes(windows.AF_INET)
 	if err != nil {
 		return false, err
@@ -64,7 +68,7 @@ func detectHostIPv6() (bool, error) {
 	for _, r := range v6routes {
 		add(r.ifIndex)
 	}
-	return decideHostIPv6(ifaces, v4routes, addrs, v6routes), nil
+	return decideHostIPv6On(index, ifaces, v4routes, addrs, v6routes), nil
 }
 
 func readV6Addresses() ([]addrRow, error) {

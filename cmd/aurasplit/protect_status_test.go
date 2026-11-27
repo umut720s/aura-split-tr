@@ -233,6 +233,14 @@ func TestDescribeStatus(t *testing.T) {
 		{"not yet probed", statusInput{scmState: "running", scmRunning: true, policyKnown: true, policyInstalled: true, state: &tunnelState{
 			State: string(engine.StateTunnelStarted), Time: now}},
 			[]string{"henüz doğrulanmadı", "PROTECTION_READY:          HAYIR"}, []string{"VERIFIED"}},
+		{"automatic egress", statusInput{scmRunning: true, state: &tunnelState{State: string(engine.StateTunnelStarted), Egress: &engine.EgressStatus{Alias: "Ethernet"}}},
+			[]string{"Çıkış arayüzü:", "Ethernet (otomatik)"}, []string{"Sağlıklı çıkış arayüzü bulunamadı"}},
+		{"egress DNS degraded", statusInput{scmRunning: true, state: &tunnelState{State: string(engine.StateTunnelStarted), Egress: &engine.EgressStatus{Alias: "Ethernet", Health: &engine.EgressSample{TCP: true}}}},
+			[]string{"TCP=true DNS=false", "arayüz DNS denetimi başarısız"}, []string{"Sağlıklı çıkış arayüzü bulunamadı"}},
+		{"egress DNS only", statusInput{scmRunning: true, state: &tunnelState{State: string(engine.StateTunnelStarted), Egress: &engine.EgressStatus{Alias: "Ethernet", Health: &engine.EgressSample{DNS: true}}}},
+			[]string{"TCP=false DNS=true"}, []string{"İnternet erişimi doğrulandı"}},
+		{"no healthy failover egress", statusInput{scmRunning: true, state: &tunnelState{State: string(engine.StateBlocking), Egress: &engine.EgressStatus{Alias: "Wi-Fi", Failover: true, NoHealthy: true}}},
+			[]string{"Wi-Fi (yedek çıkış)", "Sağlıklı çıkış arayüzü bulunamadı"}, nil},
 	}
 	for _, c := range cases {
 		out := strings.Join(describeStatus(c.in, time.UTC), "\n")

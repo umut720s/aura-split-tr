@@ -174,3 +174,17 @@ func decideHostIPv6(ifaces map[uint32]ifaceRow, v4routes []routeRow, addrs []add
 	}
 	return false
 }
+
+// decideHostIPv6On reuses the same IPv6 decision for an explicitly pinned NIC.
+func decideHostIPv6On(index int, ifaces map[uint32]ifaceRow, v4routes []routeRow, addrs []addrRow, v6routes []routeRow) bool {
+	if index != 0 {
+		var filtered []routeRow
+		for _, r := range v4routes {
+			if r.ifIndex == uint32(index) {
+				filtered = append(filtered, r)
+			}
+		}
+		v4routes = filtered
+	}
+	return decideHostIPv6(ifaces, v4routes, addrs, v6routes)
+}

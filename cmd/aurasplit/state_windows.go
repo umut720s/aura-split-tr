@@ -41,11 +41,12 @@ type tunnelState struct {
 	// Connectivity is the last tunnel probe result (engine.Connectivity),
 	// empty until a probe completed after the tunnel started. Never
 	// contains an IP address.
-	Connectivity       string    `json:"connectivity,omitempty"`
-	ConnectivityDetail string    `json:"connectivity_detail,omitempty"`
-	ConnectivityTime   time.Time `json:"connectivity_time,omitempty"`
-	ConnectivityOK     time.Time `json:"connectivity_verified,omitempty"`
-	ProbeFailures      int       `json:"probe_failures,omitempty"`
+	Connectivity       string               `json:"connectivity,omitempty"`
+	ConnectivityDetail string               `json:"connectivity_detail,omitempty"`
+	ConnectivityTime   time.Time            `json:"connectivity_time,omitempty"`
+	ConnectivityOK     time.Time            `json:"connectivity_verified,omitempty"`
+	ProbeFailures      int                  `json:"probe_failures,omitempty"`
+	Egress             *engine.EgressStatus `json:"egress,omitempty"`
 
 	// Protection is what the service established for the WFP policy.
 	Protection *protectionState `json:"protection,omitempty"`
@@ -177,7 +178,18 @@ func (w *stateWriter) set(state engine.State, detail string) {
 		// A probe result describes one running tunnel only.
 		w.cur.Connectivity, w.cur.ConnectivityDetail = "", ""
 		w.cur.ConnectivityTime, w.cur.ConnectivityOK, w.cur.ProbeFailures = time.Time{}, time.Time{}, 0
+		if state != engine.StateBlocking {
+			w.cur.Egress = nil
+		}
 	}
+	w.changedLocked()
+}
+
+func (w *stateWriter) setEgress(r engine.EgressStatus) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	r.Alias = scrubDetail(r.Alias)
+	w.cur.Egress = &r
 	w.changedLocked()
 }
 

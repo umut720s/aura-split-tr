@@ -62,6 +62,8 @@ const (
 
 // RunOptions configures Run.
 type RunOptions struct {
+	// OnEgress reports only the physical interface alias and selection health.
+	OnEgress func(EgressStatus)
 	// LogWriter receives sing-box and engine log lines through a bounded,
 	// non-blocking queue (lines are dropped and counted when the writer
 	// cannot keep up). nil writes to the console (stderr) directly.
@@ -130,6 +132,7 @@ type instance struct {
 	pump       *logPump
 	diagCancel context.CancelFunc
 	diagDone   chan struct{}
+	egressWake chan struct{}
 }
 
 // builtHostIPv6 is the host IPv6 capability the instance was built for.
@@ -256,6 +259,10 @@ var prepareBox = func(p *profile.Profile, mode Mode, level string, pump *logPump
 	if err != nil {
 		return nil, err
 	}
+	return prepareBoxEnv(p, mode, level, pump, env)
+}
+
+func prepareBoxEnv(p *profile.Profile, mode Mode, level string, pump *logPump, env netEnv) (runner, error) {
 	logOpts := logOptions{Level: level, Timestamp: true, Output: logSentinel}
 	// sing-box gets its own context so shutdown is ordered by Close rather
 	// than by an abrupt cancellation of the caller's context.
@@ -270,7 +277,7 @@ var prepareBox = func(p *profile.Profile, mode Mode, level string, pump *logPump
 		cancel()
 		return nil, err
 	}
-	return &instance{p: p, box: b, cancel: cancel, env: env, pump: pump}, nil
+	return &instance{p: p, box: b, cancel: cancel, env: env, pump: pump, egressWake: make(chan struct{}, 1)}, nil
 }
 
 func startBox(p *profile.Profile, mode Mode, level string, pump *logPump) (runner, error) {
@@ -311,7 +318,7 @@ var (
 	// IPv6 capability it was built for.
 	hostCheckInterval = 60 * time.Second
 	// minRebuildInterval bounds tunnel rebuilds: at most one attempt per
-	// interval, whatever triggers it.
+	// interval; health failover has one bounded bypass (egressRebuildWait).
 	minRebuildInterval = 2 * time.Minute
 )
 
@@ -360,7 +367,8 @@ var startProbe = func(ctx context.Context, inst runner, p *profile.Profile, url 
 // when the connectivity probe reports ConnDisconnected or when the host
 // IPv6 capability (checked every hostCheckInterval) no longer matches the
 // one the configuration was built for; at most one rebuild attempt per
-// minRebuildInterval. The replacement is prepared while the old tunnel
+// minRebuildInterval, with one bounded health failover bypass per interval.
+// The replacement is prepared while the old tunnel
 // still runs; if that fails the old tunnel is kept and the rebuild is
 // retried later. Otherwise the Discord permit and the old tunnel are
 // closed and the replacement is started like a retry from the fallback
@@ -404,6 +412,9 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 	delay := initialDelay
 	// lastRebuild is the time of the last rebuild attempt (rate limit).
 	var lastRebuild time.Time
+	var lastEgressAttempt, lastFailoverBypass time.Time
+	var activePin egressPin
+	var health egressHealth
 
 	// up runs OnTunnelUp for a started tunnel; on failure the tunnel is
 	// closed and the error is handled like a failed start.
@@ -430,11 +441,11 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 	}
 	// prepareTunnel resolves the endpoint and creates (does not start) a
 	// tunnel instance; used while another instance still runs.
-	prepareTunnel := func() (runner, error) {
-		if perr := probeEndpoint(ctx, p); perr != nil {
+	prepareTunnel := func(pin egressPin) (runner, error) {
+		if perr := probeEndpointForEgress(ctx, p, pin); perr != nil {
 			return nil, fmt.Errorf("%w: %v", ErrEndpointUnresolved, redact(p, perr))
 		}
-		return prepareBox(p, ModeTunnel, level, pump)
+		return prepareEgressBox(p, ModeTunnel, level, pump, pin)
 	}
 
 	// serve reports the started tunnel and holds it until cancellation
@@ -457,16 +468,68 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 		type rebuildRequest struct {
 			reason       string
 			connectivity bool
+			egress       *egressPin
 		}
 		var connectivityLost atomic.Bool
 		rebuild := make(chan rebuildRequest, 1)
 		trigger := func(reason string, connectivity bool) {
 			select {
-			case rebuild <- rebuildRequest{reason, connectivity}:
+			case rebuild <- rebuildRequest{reason: reason, connectivity: connectivity}:
 			default: // one pending trigger is enough
 			}
 		}
 		watchCtx, stopWatch := context.WithCancel(ctx)
+		healthWake := make(chan struct{}, 1)
+		egressRebuild := make(chan egressPin, 1)
+		var wantedEgress atomic.Pointer[egressChoice]
+		healthDone := make(chan struct{})
+		if source, ok := inst.(egressSource); ok {
+			go func() {
+				defer close(healthDone)
+				t := time.NewTicker(egressCheckInterval)
+				defer t.Stop()
+				var lastCheck time.Time
+				for {
+					// Immediate requests are coalesced and limited to one cycle
+					// per five seconds, including default-interface callbacks.
+					if d := rebuildWait(lastCheck, time.Now(), 5*time.Second); d > 0 {
+						select {
+						case <-watchCtx.Done():
+							return
+						case <-time.After(d):
+						}
+					}
+					idx, nics, err := source.egressSnapshot()
+					if err == nil {
+						lastCheck = time.Now()
+						pin, change, status := health.check(watchCtx, activePin, idx, nics, func(c context.Context, n diagnosticNIC) EgressSample { return checkEgress(c, n, logf) })
+						if watchCtx.Err() != nil {
+							return
+						}
+						if opts.OnEgress != nil {
+							opts.OnEgress(status)
+						}
+						wantedEgress.Store(nil)
+						if change {
+							wantedEgress.Store(&egressChoice{pin: pin, automatic: idx})
+							select {
+							case egressRebuild <- pin:
+							default:
+							}
+						}
+					}
+					select {
+					case <-watchCtx.Done():
+						return
+					case <-t.C:
+					case <-healthWake:
+					case <-source.egressChanges():
+					}
+				}
+			}()
+		} else {
+			close(healthDone)
+		}
 		probeDone := make(chan struct{})
 		if opts.OnConnectivity != nil {
 			url := opts.ProbeURL
@@ -475,6 +538,12 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 			}
 			onResult := func(r ProbeResult) {
 				opts.OnConnectivity(r)
+				if r.Failures > 0 || (r.State == ConnConnecting && r.Detail != "") {
+					select {
+					case healthWake <- struct{}{}:
+					default:
+					}
+				}
 				lost := r.State == ConnDisconnected && r.Failures >= ProbeDisconnectedAfter
 				connectivityLost.Store(lost)
 				if lost {
@@ -499,13 +568,17 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 					return
 				case <-t.C:
 				}
-				if v6, err := hostIPv6(); err == nil && v6 != builtV6 {
+				v6, err := hostIPv6ForEgress(activePin)
+				if err == nil && v6 != builtV6 {
 					trigger(fmt.Sprintf("host IPv6 capability changed (built for %v, now %v)", builtV6, v6), false)
 				}
 			}
 		}()
 		stopWatchers := func() {
 			stopWatch()
+			// Health checks use cancellation-aware sockets and must join before
+			// activePin or the persistent state machine is used by a successor.
+			<-healthDone
 			for _, done := range []chan struct{}{probeDone, monitorDone} {
 				select {
 				case <-done:
@@ -539,14 +612,23 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 			case <-ctx.Done():
 				return nil, shutdown()
 			case request = <-rebuild:
+			case pin := <-egressRebuild:
+				request = rebuildRequest{reason: "Çıkış arayüzü sağlık seçimi", egress: &pin}
 			}
-			if wait := rebuildWait(lastRebuild, time.Now(), minRebuildInterval); wait > 0 {
+			for {
+				wait := egressRebuildWait(lastRebuild, lastEgressAttempt, lastFailoverBypass, time.Now(), request.egress != nil && request.egress.index != 0)
+				if wait <= 0 {
+					break
+				}
 				t := time.NewTimer(wait)
 				select {
 				case <-ctx.Done():
 					t.Stop()
 					return nil, shutdown()
 				case <-t.C:
+				case pin := <-egressRebuild:
+					t.Stop()
+					request = rebuildRequest{reason: "Çıkış arayüzü sağlık seçimi", egress: &pin}
 				}
 			}
 			// Discard a queued probe rebuild if connectivity recovered while
@@ -555,9 +637,45 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 				continue
 			}
 			reason := request.reason
+			desired := activePin
+			requestedDefault := 0
+			if request.egress != nil {
+				desired = *request.egress
+				latest := wantedEgress.Load()
+				if latest == nil || latest.pin != desired {
+					continue
+				}
+				requestedDefault = latest.automatic
+				// Revalidate a queued selection after any rate-limit wait.
+				if source, ok := inst.(egressSource); ok {
+					idx, nics, err := source.egressSnapshot()
+					if desired.index == 0 && idx != requestedDefault {
+						continue
+					}
+					if desired.index != 0 {
+						idx = desired.index
+					}
+					valid := false
+					if err == nil {
+						for _, n := range egressCandidates(nics) {
+							if n.Index == idx && (desired.index == 0 || n.Name == desired.alias) {
+								valid = checkEgress(ctx, n, logf).TCP
+								break
+							}
+						}
+					}
+					if !valid {
+						continue
+					}
+				}
+				if desired.index != 0 && rebuildWait(lastRebuild, time.Now(), minRebuildInterval) > 0 {
+					lastFailoverBypass = time.Now()
+				}
+				lastEgressAttempt = time.Now()
+			}
 			lastRebuild = time.Now()
 			logf("WARN", "rebuilding the tunnel: "+reason)
-			next, err := prepareTunnel()
+			next, err := prepareTunnel(desired)
 			if err != nil {
 				// The running tunnel still confines Discord (persistent WFP
 				// policy off the TUN): keep it and try again later.
@@ -566,7 +684,9 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 			}
 			// Preparation can resolve DNS and build the configuration while
 			// probes and link monitoring continue. Revalidate before teardown.
-			if ctx.Err() != nil || (request.connectivity && !connectivityLost.Load()) || !canRebuild() {
+			latest := wantedEgress.Load()
+			obsoleteEgress := request.egress != nil && (latest == nil || latest.pin != desired || (desired.index == 0 && latest.automatic != requestedDefault))
+			if ctx.Err() != nil || obsoleteEgress || (request.connectivity && !connectivityLost.Load()) || !canRebuild() {
 				if cerr := closeBounded(next); errors.Is(cerr, ErrCloseTimeout) {
 					stopWatchers()
 					_, _ = closeCurrent()
@@ -589,6 +709,7 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 				logf("WARN", "close tunnel before rebuild: "+closeErr.Error())
 			}
 			report(StateStarting, "rebuilding the tunnel: "+reason)
+			activePin = desired
 			return next, nil
 		}
 	}
@@ -598,7 +719,10 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 	// fallback already closed), or nil and Run's result.
 	block := func(cause error) (runner, error) {
 		logf("ERROR", "tunnel start failed, blocking Discord until it works: "+cause.Error())
-		fallback, fbErr := startBox(p, ModeBlock, level, pump)
+		fallback, fbErr := prepareEgressBox(p, ModeBlock, level, pump, activePin)
+		if fbErr == nil {
+			fbErr = fallback.Start()
+		}
 		if errors.Is(fbErr, ErrCloseTimeout) {
 			return nil, terminal(fbErr)
 		}
@@ -612,7 +736,17 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 
 		// Wait, then prepare the next attempt while the fallback runs.
 		var next runner
+		retry := time.NewTimer(delay)
+		defer retry.Stop()
+		healthTick := time.NewTicker(egressCheckInterval)
+		defer healthTick.Stop()
+		var lastHealth time.Time
 		for next == nil {
+			var changes <-chan struct{}
+			if source, ok := fallback.(egressSource); ok {
+				changes = source.egressChanges()
+			}
+			retryDue := false
 			select {
 			case <-ctx.Done():
 				cerr := closeBounded(fallback)
@@ -621,17 +755,72 @@ func Run(ctx context.Context, p *profile.Profile, opts RunOptions) error {
 					return nil, cerr
 				}
 				return nil, nil
-			case <-time.After(delay):
+			case <-retry.C:
+				retryDue = true
+			case <-healthTick.C:
+			case <-changes:
 			}
-			if delay *= 2; delay > maxRetryDelay {
-				delay = maxRetryDelay
+			if retryDue {
+				if delay *= 2; delay > maxRetryDelay {
+					delay = maxRetryDelay
+				}
+				retry.Reset(delay)
 			}
-			if perr := probeEndpoint(ctx, p); perr != nil {
+			if source, ok := fallback.(egressSource); ok && rebuildWait(lastHealth, time.Now(), 5*time.Second) == 0 {
+				lastHealth = time.Now()
+				idx, nics, err := source.egressSnapshot()
+				if err == nil {
+					pin, change, status := health.check(ctx, activePin, idx, nics, func(c context.Context, n diagnosticNIC) EgressSample { return checkEgress(c, n, logf) })
+					if opts.OnEgress != nil {
+						opts.OnEgress(status)
+					}
+					if change && egressRebuildWait(lastRebuild, lastEgressAttempt, lastFailoverBypass, time.Now(), pin.index != 0) == 0 {
+						replacement, err := prepareEgressBox(p, ModeBlock, level, pump, pin)
+						if err != nil {
+							continue
+						}
+						if ctx.Err() != nil {
+							_ = closeBounded(replacement)
+							continue
+						}
+						if pin.index != 0 && rebuildWait(lastRebuild, time.Now(), minRebuildInterval) > 0 {
+							lastFailoverBypass = time.Now()
+						}
+						lastRebuild, lastEgressAttempt = time.Now(), time.Now()
+						if cerr := closeBounded(fallback); errors.Is(cerr, ErrCloseTimeout) {
+							_ = closeBounded(replacement)
+							return nil, terminal(cerr)
+						}
+						fallback = replacement
+						if err := fallback.Start(); err != nil {
+							report(StateError, err.Error())
+							return nil, err
+						}
+						activePin = pin
+						if opts.OnEgress != nil {
+							alias := pin.alias
+							if pin.index == 0 {
+								for _, n := range nics {
+									if n.Index == idx {
+										alias = n.Name
+										break
+									}
+								}
+							}
+							opts.OnEgress(EgressStatus{Alias: alias, Failover: pin.index != 0})
+						}
+					}
+				}
+			}
+			if !retryDue {
+				continue
+			}
+			if perr := probeEndpointForEgress(ctx, p, activePin); perr != nil {
 				logf("WARN", "WireGuard endpoint still does not resolve, keeping Discord blocked: "+redact(p, perr).Error())
 				continue
 			}
 			var err error
-			if next, err = prepareBox(p, ModeTunnel, level, pump); err != nil {
+			if next, err = prepareEgressBox(p, ModeTunnel, level, pump, activePin); err != nil {
 				logf("ERROR", "tunnel preparation failed, keeping Discord blocked: "+err.Error())
 				next = nil
 			}

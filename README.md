@@ -153,6 +153,22 @@ Günlük: `%ProgramData%\AuraSplitTR\service.log` (yönetici erişimi; eski kay�
 
 Güvenlik istisnası: beklenmeyen/güvenilmeyen içerikli veri klasörü ve `AuraSplitTR.quarantine-...` klasörleri elle incelenmek üzere korunabilir. İndirdiğiniz `.conf` dosyasını MSI silmez. Ayrıntılar: [mimari](ARCHITECTURE.md).
 
+### Ethernet ve Wi-Fi birlikte açıkken DNS / İnternet kesiliyor
+
+`status` çıktısındaki **Çıkış arayüzü** satırını kontrol edin: adaptörün takma adı
+ve `otomatik` veya `yedek çıkış` seçimi gösterilir. Seçili adaptör açık kalıp trafik
+geçirmiyorsa AURA, üç başarısız sağlık kontrolünden sonra sağlıklı başka bir IPv4
+varsayılan rota adaptörüne geçer. Normal 30 saniyelik kontrollerle yaklaşık iki dakika
+içinde DNS ve doğrudan erişimin toparlanması beklenir; bu süre canlıda henüz doğrulanmadı.
+Öncelikli otomatik adaptör üç başarılı kontrol sonrası yeniden kullanılabilir; hızlı
+gidip gelmeyi önlemek için dönüşte yeniden kurulum beklemesi uygulanır.
+
+**Sağlıklı çıkış arayüzü bulunamadı** uyarısı varsa adaptörün bağlantısını ve modem/switch
+uplink'ini kontrol edin. Adaptörün Windows'ta açık görünmesi İnternet erişimini kanıtlamaz.
+Her iki fiziksel ağdaki DNS/İnternet erişimi ve VPN sağlayıcısının erişimi ayrı koşullardır.
+Geçiş sırasında mevcut bağlantılar kopabilir. Discord engelleme ve DNS izolasyon kuralları
+korunur; `strict_route` veya güvenlik yazılımını kapatmayın.
+
 ## Antivirüs ve SmartScreen
 
 **Bu betanın exe ve MSI dosyaları Authenticode imzalı değildir.** SmartScreen uyarısı çıkabilir. Hizmet kuran ve ağ filtresi kullanan araçlar sezgisel antivirüs algılamalarına takılabilir; bir uyarı tek başına dosyanın güvenli veya zararlı olduğunu kanıtlamaz.
@@ -173,6 +189,11 @@ Teknik olarak **sing-box TUN**, süreç/alan adı kurallarıyla Discord'u **Wire
 Alan adı kuralları `discord.com`, `discord.gg`, `discordapp.com`, `discordapp.net`, `discord.media`, `discordcdn.com`, `discordsays.com`, `dis.gd`, `discord.gift`, `discord.dev` ve mimaride belirtilen diğer Discord hedeflerini kapsar. Hizmet çalışırken bu adların DNS'i tünelden çözülür. WireGuard sunucusu alan adıyla belirtilmişse tüneli kurmak için sunucu adı sistem çözücüsüyle tünel dışında çözülür.
 
 **Otomatik ağ isteği:** Proton veya başka sağlayıcı seçseniz de hizmet, tünelin içinden **`https://www.cloudflare.com/cdn-cgi/trace`** adresine başlangıçta, normalde **5 dakikada bir** ve **ağ değişiminde** HTTPS bağlantı denetimi yapar; başarısızlıkta daha sık yeniden deneyebilir. Bu denetimin DNS sorgusu da tünelden gider. Yanıttan yalnızca `warp=` ve `ip=` okunur; IP'nin geçerli adres olduğu kontrol edilir, **saklanmaz veya günlüğe yazılmaz**. Cloudflare isteği VPN çıkış adresinden görür.
+
+Çıkış sağlığı ayrıca fiziksel adaptöre bağlı, sabit `example.com.` DNS sorguları ve
+`1.1.1.1:443` / `8.8.8.8:443` TCP bağlantılarıyla denetlenir; TCP'de uygulama verisi
+gönderilmez. Bunlar ziyaret geçmişini içermez; hedefler fiziksel çıkış IP'sini görür.
+Normal aralık 30 saniyedir; başarısızlık/ağ değişiminde ek kontrol yapılabilir.
 
 Ayrıntılar: [ARCHITECTURE.md](ARCHITECTURE.md).
 

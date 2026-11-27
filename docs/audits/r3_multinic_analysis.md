@@ -96,6 +96,34 @@ Birim testleri sahte bağdaştırıcı/rota tabloları ve sahte prob sonuçları
 tünel başlatmaz, paket göndermez. Wi-Fi bağlıyken iki ailenin bayraklarını tekrar
 ölçmek gerekir.
 
+## R4 sonrası sonuç ve uygulanan düzeltme (2026-11-27)
+
+R3 follow-up Ethernet tek başınayken çalıştı; R4'te iki NIC de İnternet erişimine
+sahipken arıza tekrarlanmadı. Bu sonuçlar tek başına R3 kök nedenini kanıtlamaz.
+R4 kaynak/bağlı prob bulguları tek varsayılan NIC'e bağımlılığı gösteriyor: seçili
+NIC açık fakat trafik geçirmiyorsa doğrudan trafik ve yerel DNS için sağlık failover'ı
+yoktu. `strict_route` altında Windows DNS İstemcisi'nin normal çoklu adaptör
+geri dönüşüne güvenilemez; AURA sürecinin port-53 muafiyetinin tek NIC ile sınırlı
+olduğu iddia edilmiyor. Forwarding mekanizması R4'te iki NIC bağlıyken de desteklenmedi.
+
+`internal/engine/egress.go` artık seçili NIC'e bağlı kendi DNS sunucusu sorgularını
+ve iki sabit genel hedefe yalnızca TCP connect denemelerini izler (30 sn, NIC başına
+2 sn süre sınırı, üç tümü-başarısız kontrol). Sağlıklı alternatifler IPv4 varsayılan
+rota + arayüz metriği sırasıyla, aynı alt ağda olsalar da ayrı indekslerle değerlendirilir.
+Yeni kutu eski kutu kapanmadan hazırlanır; mevcut WFP izin kapatma/açma sırası korunur.
+Failover `route.default_interface` ile direct/wg-direct/yerel DNS `bind_interface`
+alanlarını sabitler. Yerel DNS bağlaması v1.14.4'ün `LocalDNSServerOptions` →
+`dns.NewLocalDialer` → `common/dialer/default.go` yolunda desteklenir;
+`local_shared.go` sunuculara bu dialer ile bağlanır. IPv6 kararı sabitlenen indeksi izler.
+Adı olan eşin çözümü de o NIC'e bağlıdır. Otomatik varsayılana dönüş üç başarılı
+kontrol ve normal yeniden kurulum kapısını gerektirir. Failover kapıyı iki dakikada
+bir kez aşabilir; çıkış değiştirme denemeleri en az 30 sn aralıklıdır.
+
+Takma ad/seçim türü ve sağlıklı NIC yok uyarısı durum çıktısına eklendi. Sağlık
+günlükleri adres veya DNS yanıtı içermez. Discord sınıflandırması, engelleme modu,
+`strict_route` ve WFP politikası değiştirilmedi. Sahte NIC/problarla test kapsamı var;
+canlı toparlanma süresi ve iki fiziksel NIC üzerinde sızıntı doğrulaması **yapılmadı**.
+
 ## Live confirmation (maintainer-controlled, not performed here)
 
 1. Repeat Ethernet-only, both NICs, and Wi-Fi-only with the same profile; capture

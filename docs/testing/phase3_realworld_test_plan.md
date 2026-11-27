@@ -667,6 +667,29 @@ Remaining risks: Discord connections in flight when the peer died may hang rathe
 
 ---
 
+### S9b – selected NIC up but dead (çoklu NIC sağlık failover)
+
+Durum: **NOT TESTED**. Yalnızca bakımcı kontrollü, yetkilendirilmiş canlı test.
+Ethernet ve Wi-Fi açık, IPv4 varsayılan rotalı ve başlangıçta erişebilir olsun;
+aynı alt ağ / farklı metrik durumunu da kapsayın. Ethernet'in otomatik seçildiğini
+`status` ve adres içermeyen sağlık günlüğüyle doğrulayın. NIC bilgisayarda açık
+kalırken router/switch tarafındaki Ethernet uplink'ini çıkarın; Windows adaptörünü
+kapatmak bu senaryonun yerine geçmez.
+
+Beklenti: üç tümü-başarısız kontrolden sonra yaklaşık iki dakika içinde **Wi-Fi
+yedek çıkışı**, DNS ve doğrudan HTTPS erişiminin toparlanması; VPN sağlayıcısı
+erişilebilirse tünel doğrulamasının geri gelmesi. Ethernet uplink'i geri gelince
+üç başarılı sağlık kontrolü ve yeniden kurulum kapısından sonra otomatik seçime
+dönüş; aralıklı tek başarı/başarısızlıkla gidip gelmeme. Her iki NIC erişilemezse
+sağlıklı çıkış yok uyarısı, Discord doğrudan bağlantısının engelli kalması beklenir.
+
+İki fiziksel NIC'te DNS/TLS/Discord uygulama trafiği sızıntı kontrolünü geçiş
+öncesi, geçiş sırasında ve sonrasında tekrarlayın; mevcut bağlantıların kopması
+olasıdır. Aynı testi engelleme modunda DNS/doğrudan erişim toparlanması ve Discord
+reddinin sürmesi için tekrarlayın. IPv6 yalnızca yedek NIC'te ve yalnızca ilk NIC'te
+bulunan iki varyantı da sınayın. Zaman damgaları, takma ad/seçim türü, DNS/HTTPS
+sonucu ve maskelenmiş yakalama bulgularını kaydedin; ham adresleri depoya eklemeyin.
+
 ### S10 – Reconnection
 
 TR: Engel kaldırılınca tünel kendiliğinden toparlanmalı, Discord yeniden bağlanmalı, ara dönemde sızıntı olmamalı.

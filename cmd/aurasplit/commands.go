@@ -157,6 +157,22 @@ func describeStatus(in statusInput, loc *time.Location) []string {
 		out = append(out, line+")")
 	}
 
+	if ts != nil && in.scmRunning && ts.Egress != nil {
+		selection := "otomatik"
+		if ts.Egress.Failover {
+			selection = "yedek çıkış"
+		}
+		add("Çıkış arayüzü:             %s (%s)", ts.Egress.Alias, selection)
+		if ts.Egress.NoHealthy {
+			add("UYARI:                     Sağlıklı çıkış arayüzü bulunamadı; DNS ve İnternet erişimi kesilebilir.")
+		}
+		if health := ts.Egress.Health; health != nil {
+			add("Çıkış sağlık denetimi:      TCP=%t DNS=%t", health.TCP, health.DNS)
+			if health.TCP && !health.DNS {
+				add("UYARI:                     İnternet erişimi doğrulandı; arayüz DNS denetimi başarısız.")
+			}
+		}
+	}
 	var prot *protectionState
 	if ts != nil && in.scmRunning {
 		prot = ts.Protection
@@ -554,6 +570,7 @@ func serviceRun(ctx context.Context) error {
 		OnState:        sw.set,
 		OnTunnelUp:     prot.onTunnelUp,
 		OnConnectivity: sw.setConnectivity,
+		OnEgress:       sw.setEgress,
 	})
 	if errors.Is(err, engine.ErrCloseTimeout) && ctx.Err() == nil {
 		// A sing-box instance did not close: it may still own the TUN,

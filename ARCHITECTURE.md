@@ -120,7 +120,7 @@ yeni izin açılamasa da kapatılır; kapatma hatası hazır duruma geçişi eng
      `VPN_DISCONNECTED` (art arda ≥ 3 başarısız deneme) bildirdiğinde **veya** ana makinenin
      IPv6 yeteneği (60 sn'de bir denetlenir) yapılandırmanın kurulduğu değerden farklı
      olduğunda yeniden kurulur: yeni yapılandırma, ad yeniden çözülür. En fazla **2 dk'da
-     bir deneme** (`minRebuildInterval`). Yeni örnek eski tünel çalışırken hazırlanır;
+     bir deneme** (`minRebuildInterval`); aşağıdaki sağlık failover istisnası sınırlıdır. Yeni örnek eski tünel çalışırken hazırlanır;
      hazırlama başarısızsa (ör. ad çözülemiyor) eski tünel kalır ve sonraki denemede
      yeniden denenir. Başarılıysa: deneme ve IPv6 izleyicisi durur → Discord tünel izni
      kapatılır → eski tünel kapatılır (kapanma zaman aşımı terminaldir) → durum
@@ -128,13 +128,37 @@ yeni izin açılamasa da kapatılır; kapatma hatası hazır duruma geçişi eng
      boşlukta kalıcı WFP politikası Discord'u engeller; başlatma başarısızsa engelleme
      yapılandırmasına geçilir. Sahte örneklerle birim testli; gerçek ağ değişikliğiyle
      **NOT TESTED**.
+   - **Sağlığa göre çıkış seçimi (`engine/egress.go`):** normal seçim sing-tun'un
+     otomatik varsayılan arayüzüdür. Her 30 sn'de, VPN bağlantı denetimi başarısızlığında
+     ve varsayılan arayüz bildiriminde seçili NIC denetlenir; ani bildirimler birleştirilir,
+     denetimler en az 5 sn aralıklıdır. O NIC'e bağlı soketlerle kendi DNS sunucularına
+     sabit `example.com.` sorgusu ve `1.1.1.1:443` / `8.8.8.8:443` TCP bağlantıları
+     (veri göndermeden) denenir. NIC başına ortak süre sınırı 2 sn, DNS sunucu sınırı 8'dir.
+     Herhangi bir probun başarısı yeterlidir; üç art arda tümü başarısız kontrolden sonra
+     açık, IPv4 varsayılan rotalı alternatifler rota + arayüz metriği sırasıyla denenir.
+     Aynı alt ağdaki NIC'ler indeksleriyle ayrılır. Seçili NIC kaybolursa bekleme gerekmez.
+     Sağlıklı alternatif mevcut yeniden kurulum yoluyla sabitlenir: `auto_detect_interface=false`,
+     `route.default_interface`, `direct` ve `wg-direct` için `bind_interface`, yerel DNS
+     taşıyıcısında `bind_interface`. sing-box v1.14.4 `option/route.go`, `option/dns.go`,
+     `dns/transport_dialer.go`, `dns/transport/local/local_shared.go` ve
+     `common/dialer/default.go` bu seçenekleri ve DNS soketlerine uygulanmasını doğrular.
+     Adı olan WireGuard eşi de sabitlenen NIC'in DNS sunucularıyla çözülür.
+     Failover iki dakikalık yeniden kurma kapısını iki dakikalık pencerede yalnızca bir
+     kez aşabilir; çıkış değiştirme denemeleri en az 30 sn aralıklıdır. Dönüş kapıyı aşamaz.
+     Güncel otomatik varsayılan NIC üç art arda başarılı kontrolden sonra otomatik seçime
+     dönülür; beklerken geçersizleşen seçim atılır. Engelleme modunda da sağlık izlenir ve
+     çıkış değişebilir; Discord reddi, `strict_route`, sınıflandırma ve WFP sırası korunur.
+     `status` yalnızca takma ad, otomatik/yedek çıkış seçimi ve sağlıklı NIC yok uyarısını
+     gösterir. Sağlık günlükleri indeks/takma ad ve DNS/TCP sonucunu içerir; adres içermez.
+     Bu davranış sahte NIC/problarla sınanmıştır; up-but-dead canlı testi henüz yapılmadı.
    - **Ana makine IPv6 yeteneği (`engine/hostipv6*.go`):** arayüz adreslerini taramak
      yerine IP yardımcı tabloları okunur (`GetUnicastIpAddressTable`,
      `GetIpForwardTable2`, `GetIfEntry2Ex`, `GetIpInterfaceEntry`; salt okuma).
      Önce sabitlenmiş sing-tun Windows izleyicisi gibi IPv4 `0.0.0.0/0` rotaları
      arasından açık, bağlı, sanal TUN/loopback olmayan arabirim seçilir: rota metriği
      + IPv4 arabirim metriği en küçük olan kazanır, eşitlikte ilk kayıt korunur.
-     Yetenek yalnızca **bu seçili çıkış** arayüzü
+     Failover sırasında otomatik seçim yerine sabitlenen indeks için aynı
+     `decideHostIPv6` kararı uygulanır. Yetenek yalnızca **bu seçili çıkış** arayüzü
      hem *up*, geri döngü değil, AURA TUN'u değil, hem tercih edilen (DAD *preferred*) global
      tek noktaya yayın IPv6 adresine (ULA `fc00::/7`, link-local, Teredo `2001::/32`, 6to4
      `2002::/16` hariç) **hem de** `::/0` varsayılan IPv6 yoluna sahipse doğrudur. Bir sanal
@@ -493,7 +517,7 @@ sıfırlanır. "Doğrulandı" asla süreç varlığından çıkarılmaz.
 | `internal/paths` | ortak + engine ajanı | `DataDir`, `InstallDir`, `ProfilePath`, `LogPath`, `StatePath`, `InstalledExePath`; `EnsureSecureDir`, `WriteSecureFile`, `WriteSecureFileInDir`, `StageSecureFile`, `OpenSecureAppend`, `ReplaceFile`, `IsTrustedAppDir`, `IsTrustedFile`, `CleanDataDir` (`CleanResult`), `QuarantineInfix` (SDDL `O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)`; `InstallSDDL` = MSI'nin kurulum klasörüne koyduğu tanımlayıcı, ek olarak `BU` okuma/çalıştırma) |
 | `internal/logfile` | engine ajanı | `Open(dir, name string, maxSize int64, backups int) (*Writer, error)` — kesin boyut sınırlı döndürmeli günlük; `Degraded() bool`; `Scrub`/`ScrubString` (kullanıcı yolları) |
 | `internal/provider` | Codex | `ParseWireGuardConf(data []byte) (profile.WireGuard, error)`; `RegisterWARP(ctx context.Context, c *http.Client) (profile.WireGuard, error)` |
-| `internal/engine` | engine ajanı | `BuildConfig(p *profile.Profile) ([]byte, error)` (ad uç noktası çözülemezse `ErrEndpointUnresolved`); `BuildBlockConfig`; `Check(p *profile.Profile) error`; `Run(ctx context.Context, p *profile.Profile, opts RunOptions) error` (ctx iptaline kadar bloklar; `RunOptions{LogWriter, Debug, OnState, RetryDelay, OnTunnelUp func() (io.Closer, error), OnConnectivity func(ProbeResult), ProbeURL}`; durumlar `StateStarting`, `StateTunnelStarted`, `StateBlocking`, `StateError`, `StateStopped`; bağlantı `ConnConnecting`, `ConnVerified`, `ConnDegraded`, `ConnDisconnected`) |
+| `internal/engine` | engine ajanı | `BuildConfig(p *profile.Profile) ([]byte, error)` (ad uç noktası çözülemezse `ErrEndpointUnresolved`); `BuildBlockConfig`; `Check(p *profile.Profile) error`; `Run(ctx context.Context, p *profile.Profile, opts RunOptions) error` (ctx iptaline kadar bloklar; `RunOptions{LogWriter, Debug, OnState, RetryDelay, OnTunnelUp func() (io.Closer, error), OnConnectivity func(ProbeResult), OnEgress func(EgressStatus), ProbeURL}`; durumlar `StateStarting`, `StateTunnelStarted`, `StateBlocking`, `StateError`, `StateStopped`; bağlantı `ConnConnecting`, `ConnVerified`, `ConnDegraded`, `ConnDisconnected`) |
 | `internal/wfp` | engine ajanı | `Policy` arayüzü: `Apply(paths []string, mode ApplyMode) (ApplyResult, error)` (`AddOnly`/`Authoritative`; `*IncompleteError`/`ErrIncomplete` geçerli sonuçla döner), `PermitOnTunnel(luid uint64, paths []string) (Permit, error)` (`Permit`: `io.Closer` + `Paths()`), `RemoveAll() error`, `Installed() (bool, int, error)`; `New() *Firewall`; `NewGuard(...)` (`Reconcile`, `TunnelUp`, `Run(ctx, interval, kick)`, `Status`); `Discover`, `DiscoverIn`, `ProfileDirs`, `ErrCapReached`, `WatchTargets`, `WatchTargetsIn`, `RunWatcher`, `TunnelLUID`; `ProviderKey`, `SubLayerKey`, `SubLayerWeight` |
 | `internal/service` | engine ajanı | `IsAdmin() bool`; `IsWindowsService() (bool, error)`; `Verify(exePath string) error` (MSI'nin kaydettiği hizmeti doğrular: tırnaklı komut satırı, LocalSystem, kendi süreci, `BFE`; hizmeti CLI **oluşturmaz/silmez**); `EnableNonCrashRecovery() error`; `SetAutoStart(bool) error`; `Disable() error`; `ScrubEventText`; hatalar `ErrNotInstalled`, `ErrNotRunning`, `ErrStartPending`, `ErrFatal` (gözetici durur, hizmet sıfırdan farklı kodla çıkar); `Start() error`; `StartWait(timeout) error`; `Stop() error`; `Status() (string, error)`; `StatusPID() (string, uint32, error)`; `RunService(run func(ctx context.Context) error) error` |
 | `cmd/aurasplit` | CLI ajanı | `setup` (yalnızca kurulu kopyadan; yapılandırma), `status`, `start`, `stop`, `restart`, `disable`, `recover`, `uninstall` (yalnızca MSI ile kaldırmayı anlatır), `recover --msi` / `start --msi` / `uninstall --msi` (Windows Installer bağlamı, etkileşimsiz), `run [--debug]` (ön planda hata ayıklama, konsola günlük), `service` (gizli; SCM çağırır), `version` |

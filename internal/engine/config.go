@@ -108,11 +108,12 @@ type dnsOptions struct {
 }
 
 type dnsServer struct {
-	Type       string `json:"type"`
-	Tag        string `json:"tag"`
-	Server     string `json:"server,omitempty"`
-	ServerPort uint16 `json:"server_port,omitempty"`
-	Detour     string `json:"detour,omitempty"`
+	BindInterface string `json:"bind_interface,omitempty"`
+	Type          string `json:"type"`
+	Tag           string `json:"tag"`
+	Server        string `json:"server,omitempty"`
+	ServerPort    uint16 `json:"server_port,omitempty"`
+	Detour        string `json:"detour,omitempty"`
 }
 
 type dnsRule struct {
@@ -160,12 +161,14 @@ type tunInbound struct {
 }
 
 type plainOutbound struct {
+	BindInterface  string `json:"bind_interface,omitempty"`
 	Type           string `json:"type"`
 	Tag            string `json:"tag"`
 	ConnectTimeout string `json:"connect_timeout,omitempty"`
 }
 
 type routeOptions struct {
+	DefaultInterface      string      `json:"default_interface,omitempty"`
 	Rules                 []routeRule `json:"rules"`
 	Final                 string      `json:"final"`
 	AutoDetectInterface   bool        `json:"auto_detect_interface"`
@@ -233,6 +236,7 @@ var ErrEndpointUnresolved = errors.New("WireGuard endpoint host could not be res
 // netEnv is what a configuration depends on outside the profile. It is
 // determined right before an instance is prepared.
 type netEnv struct {
+	egress egressPin
 	// hostIPv6 is the host IPv6 capability (hostHasIPv6) the configuration
 	// was built for.
 	hostIPv6 bool
@@ -440,7 +444,7 @@ func buildConfig(p *profile.Profile, logOpts logOptions, mode Mode, env netEnv) 
 	}
 	dnsRules = append(dnsRules, withDNS(dnsRule{Domain: DiscordHosts, DomainSuffix: DiscordDomains}))
 
-	servers := []dnsServer{{Type: "local", Tag: TagDNSLocal}}
+	servers := []dnsServer{{Type: "local", Tag: TagDNSLocal, BindInterface: env.egress.alias}}
 	var endpoints []wgEndpoint
 	if mode == ModeTunnel {
 		servers = append([]dnsServer{{Type: "udp", Tag: TagDNSRemote, Server: remoteDNS, ServerPort: 53, Detour: TagWG}}, servers...)
@@ -467,6 +471,9 @@ func buildConfig(p *profile.Profile, logOpts logOptions, mode Mode, env netEnv) 
 		// connect_timeout makes the outbound "non-empty"; sing-box refuses
 		// a detour to an empty direct outbound.
 		outbounds = append(outbounds, plainOutbound{Type: "direct", Tag: TagWGDirect, ConnectTimeout: "10s"})
+	}
+	for j := range outbounds {
+		outbounds[j].BindInterface = env.egress.alias
 	}
 
 	cfg := config{
@@ -495,7 +502,8 @@ func buildConfig(p *profile.Profile, logOpts logOptions, mode Mode, env netEnv) 
 		Route: routeOptions{
 			Rules:                 routeRules,
 			Final:                 TagDirect,
-			AutoDetectInterface:   true,
+			AutoDetectInterface:   env.egress.index == 0,
+			DefaultInterface:      env.egress.alias,
 			DefaultDomainResolver: TagDNSLocal,
 		},
 	}

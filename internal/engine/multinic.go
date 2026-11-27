@@ -72,7 +72,7 @@ func dnsScope(server string, prefixes []netip.Prefix) string {
 
 func reportNICs(selected int, nics []diagnosticNIC, autoIndex func(string) int, log func(string, string)) {
 	level := diagnosticLevel(nics)
-	log(level, fmt.Sprintf("Ağ tanılama: sing-tun varsayılan arayüz indeksi=%d; yerel DNS genel hedef çıkış indeksi=%d; yerel hedef çıkışı sunucuya göre belirlenir.", selected, selected))
+	log(level, fmt.Sprintf("Ağ tanılama: etkin çıkış arayüz indeksi=%d; otomatik bağlama kullanılıyorsa yerel hedef çıkışı sunucuya göre belirlenir.", selected))
 	for _, n := range nics {
 		if n.Flags&net.FlagUp == 0 {
 			continue
@@ -96,7 +96,7 @@ func reportNICs(selected int, nics []diagnosticNIC, autoIndex func(string) int, 
 // Diagnostics never print addresses, DNS answers, SSIDs or raw network errors.
 // They do not change routes, filters or the interface used by production dials.
 func diagnoseNICs(ctx context.Context, selected int, ifaces []adapter.NetworkInterface, autoIndex func(string) int, probe func(context.Context, adapter.NetworkInterface, string) string, warn func(string)) {
-	warn(fmt.Sprintf("Ağ tanılama: sing-tun varsayılan arayüz indeksi=%d; direct, wg-direct ve yerel DNS otomatik bağlama kullanıyor.", selected))
+	warn(fmt.Sprintf("Ağ tanılama: otomatik seçimin karşılaştırma arayüz indeksi=%d; etkin çıkış seçimi ayrıca sağlık durumunda bildirilir.", selected))
 	for _, nic := range ifaces {
 		if nic.Flags&net.FlagUp == 0 || len(nic.Gateways) == 0 || nic.Name == TunInterfaceName {
 			continue
@@ -165,6 +165,9 @@ func (i *instance) startNICDiagnostics() {
 	}
 	autoIndex := func(selected int) func(string) int {
 		return func(server string) int {
+			if i.env.egress.index != 0 {
+				return i.env.egress.index
+			}
 			if addr, err := netip.ParseAddr(server); err == nil {
 				if nic, err := nm.InterfaceFinder().ByAddr(addr); err == nil {
 					return nic.Index
@@ -178,11 +181,16 @@ func (i *instance) startNICDiagnostics() {
 	var access sync.Mutex
 	stopped := false
 	snapshot := func(selected int) []diagnosticNIC {
+		effective := selected
+		if i.env.egress.index != 0 {
+			effective = i.env.egress.index
+		}
+		log("INFO", fmt.Sprintf("Ağ tanılama: otomatik varsayılan arayüz indeksi=%d etkin çıkış indeksi=%d", selected, effective))
 		nics, err := readDiagnosticNICs()
 		if err != nil {
 			log("INFO", "Ağ tanılama: Windows bağdaştırıcı tablosu okunamadı.")
 		}
-		reportNICs(selected, nics, autoIndex(selected), log)
+		reportNICs(effective, nics, autoIndex(effective), log)
 		return nics
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -194,6 +202,10 @@ func (i *instance) startNICDiagnostics() {
 			defer access.Unlock()
 			if stopped || ctx.Err() != nil {
 				return
+			}
+			select {
+			case i.egressWake <- struct{}{}:
+			default:
 			}
 			selected := 0
 			if nic != nil {
@@ -219,6 +231,9 @@ func (i *instance) startNICDiagnostics() {
 		}
 	}
 	nics := snapshot(selected)
+	if i.env.egress.index != 0 {
+		selected = i.env.egress.index
+	}
 	access.Unlock()
 	var ifaces []adapter.NetworkInterface
 	for _, n := range nics {
