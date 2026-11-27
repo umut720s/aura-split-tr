@@ -40,7 +40,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing git tag to build, e.g. v0.1.0-beta"
+        description: "Existing git tag to build, e.g. v0.1.1-beta"
         required: true
         type: string
       create_draft_release:

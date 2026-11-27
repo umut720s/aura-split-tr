@@ -1,3 +1,5 @@
+Superseded by v0.1.1-beta
+
 # v0.1.0-beta (experimental)
 
 **Deneysel, üretime hazır değildir / Experimental, not production-ready.** Exe/MSI Authenticode imzasızdır; bağımsız paket düzeyi doğrulaması yoktur. Riski size ait olmak üzere kullanın / Use at your own risk.

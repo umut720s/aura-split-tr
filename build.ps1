@@ -120,9 +120,9 @@ $artifacts = @($out)
 
 if (-not $NoMsi) {
     # Windows Installer versions are major.minor.build (major, minor <= 255,
-    # build <= 65535); a pre-release suffix is dropped: 0.1.0-beta -> 0.1.0.
+    # build <= 65535); a pre-release suffix is dropped: 0.1.1-beta -> 0.1.1.
     # Same-version packages upgrade each other (MajorUpgrade
-    # AllowSameVersionUpgrades), so 0.1.0 replaces 0.1.0-beta.
+    # AllowSameVersionUpgrades); a higher tag-derived MSI version upgrades older versions.
     if ($Version -match '^v?(\d+)\.(\d+)\.(\d+)') {
         $msiVersion = "$([int]$Matches[1]).$([int]$Matches[2]).$([int]$Matches[3])"
         if ([int]$Matches[1] -gt 255 -or [int]$Matches[2] -gt 255 -or [int]$Matches[3] -gt 65535) {

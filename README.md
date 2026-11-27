@@ -2,9 +2,9 @@
 
 # AURA Split TR
 
-> **Deneysel beta — v0.1.0-beta.** Masaüstü Discord'u, güncelleyicisini ve bilinen yardımcılarını Proton VPN, Cloudflare WARP veya standart bir WireGuard yapılandırması üzerinden yönlendirir; diğer uygulamalar doğrudan bağlantıyı kullanır. **Deneyseldir, exe/MSI imzasızdır ve bağımsız paket düzeyi doğrulaması yoktur. Riski size ait olmak üzere kullanın; üretime hazır değildir.** Kapsam sınırları aşağıdadır.
+> **Deneysel beta — v0.1.1-beta.** Masaüstü Discord'u, güncelleyicisini ve bilinen yardımcılarını Proton VPN, Cloudflare WARP veya standart bir WireGuard yapılandırması üzerinden yönlendirir; diğer uygulamalar doğrudan bağlantıyı kullanır. **Deneyseldir, exe/MSI imzasızdır ve bağımsız paket düzeyi doğrulaması yoktur. Riski size ait olmak üzere kullanın; üretime hazır değildir.** Kapsam sınırları aşağıdadır.
 
-Windows hizmeti olarak arka planda çalışır. **Yalnızca Windows 11 x64 üzerinde test edildi.** [English summary](#english-summary) · [Sürüm notları](docs/RELEASE_NOTES_v0.1.0-beta.md)
+Windows hizmeti olarak arka planda çalışır. **Yalnızca Windows 11 x64 üzerinde test edildi.** [English summary](#english-summary) · [Sürüm notları](docs/RELEASE_NOTES_v0.1.1-beta.md)
 
 ## Bilinen sınırlar
 
@@ -22,13 +22,13 @@ Ayrıntılar: [ağ izolasyonu denetimi](docs/audits/network_isolation_audit.md),
 
 ## İndirme ve kurulum
 
-1. [GitHub Releases](https://github.com/umut720s/aura-split-tr/releases) üzerinden `AuraSplitTR-0.1.0-beta-x64.msi` ve aynı sürümün `SHA256SUMS.txt` dosyasını indirin.
+1. [GitHub Releases](https://github.com/umut720s/aura-split-tr/releases) üzerinden `AuraSplitTR-0.1.1-beta-x64.msi` ve aynı sürümün `SHA256SUMS.txt` dosyasını indirin.
 2. İndirme klasöründe PowerShell açın:
 
    ```powershell
-   (Get-FileHash .\AuraSplitTR-0.1.0-beta-x64.msi -Algorithm SHA256).Hash.ToLower()
+   (Get-FileHash .\AuraSplitTR-0.1.1-beta-x64.msi -Algorithm SHA256).Hash.ToLower()
    Get-Content .\SHA256SUMS.txt
-   gh attestation verify .\AuraSplitTR-0.1.0-beta-x64.msi --repo umut720s/aura-split-tr
+   gh attestation verify .\AuraSplitTR-0.1.1-beta-x64.msi --repo umut720s/aura-split-tr
    ```
 
    Hash'i dosyanın ilgili satırıyla karşılaştırın; doğrulamalardan biri başarısızsa çalıştırmayın. Hash bütünlüğü, attestation derleme kaynağını denetler; bunlar güvenlik testi veya Authenticode imzası değildir. Ayrıntılar: [indirme doğrulaması](docs/BUILD.md#verifying-a-downloaded-release).
@@ -40,7 +40,7 @@ Ayrıntılar: [ağ izolasyonu denetimi](docs/audits/network_isolation_audit.md),
    - **Diğer WireGuard:** tek `[Peer]` içeren standart `.conf` seçin. `PostUp`/`PostDown` betikleri çalıştırılmaz; sağlayıcı uyumluluğu canlıda doğrulanmadı.
 6. `status` ile kontrol edin; ilk bağlantı 1–2 dakika sürebilir. Discord'u tepsiden tamamen kapatıp yeniden açın. `.conf` özel anahtar içerir: paylaşmayın; indirdiğiniz kopyayı ve Geri Dönüşüm Kutusu kopyasını silin.
 
-Yeni MSI ile güncelleme mevcut profili korur. Dosya seçici açılmazsa **Yol olarak kopyala** ile yolu yapıştırın.
+v0.1.1-beta MSI, v0.1.0-beta üzerine kurulabilir; önce kaldırmak gerekmez ve mevcut profil korunur. Dosya seçici açılmazsa **Yol olarak kopyala** ile yolu yapıştırın.
 
 ## Kullanım ve kurtarma
 
@@ -87,9 +87,9 @@ Profil `%ProgramData%\AuraSplitTR\profile.json` içinde Administrators/SYSTEM er
 
 ## English summary
 
-> **Experimental beta — v0.1.0-beta.** Routes desktop Discord, its updater and known helpers through Proton VPN, Cloudflare WARP or a standard WireGuard configuration; other apps use the direct connection. **Experimental, unsigned exe/MSI, and not independently packet-verified. Use at your own risk; not production-ready.** Coverage is limited as described below.
+> **Experimental beta — v0.1.1-beta.** Routes desktop Discord, its updater and known helpers through Proton VPN, Cloudflare WARP or a standard WireGuard configuration; other apps use the direct connection. **Experimental, unsigned exe/MSI, and not independently packet-verified. Use at your own risk; not production-ready.** Coverage is limited as described below.
 
-Runs as a background Windows service. **Only Windows 11 x64 has been tested.**
+Runs as a background Windows service. **Only Windows 11 x64 has been tested.** [Release notes](docs/RELEASE_NOTES_v0.1.1-beta.md)
 
 ### Known limitations
 
@@ -110,14 +110,14 @@ See the [isolation audit](docs/audits/network_isolation_audit.md), [remediation 
 Download the MSI and matching `SHA256SUMS.txt` from [Releases](https://github.com/umut720s/aura-split-tr/releases). In the download folder:
 
 ```powershell
-(Get-FileHash .\AuraSplitTR-0.1.0-beta-x64.msi -Algorithm SHA256).Hash.ToLower()
+(Get-FileHash .\AuraSplitTR-0.1.1-beta-x64.msi -Algorithm SHA256).Hash.ToLower()
 Get-Content .\SHA256SUMS.txt
-gh attestation verify .\AuraSplitTR-0.1.0-beta-x64.msi --repo umut720s/aura-split-tr
+gh attestation verify .\AuraSplitTR-0.1.1-beta-x64.msi --repo umut720s/aura-split-tr
 ```
 
 Compare the hash with the matching entry. Do not run the file if either check fails. Hashes check integrity; attestation checks build provenance. Neither is an Authenticode signature or a security test. Verify any separately downloaded exe/zip the same way. [Verification details](docs/BUILD.md#verifying-a-downloaded-release).
 
-Install the verified MSI, approve UAC, then open **“AURA Split TR - Yapılandır”** from Start. Nothing is blocked until configured. Select WARP (accept its terms; registration can be refused), Proton or a single-peer WireGuard `.conf`. Disconnect other VPN tunnels first. `PostUp`/`PostDown` scripts are not executed. Check `status`, allow 1–2 minutes for connection, then fully restart Discord. Delete downloaded config copies after setup; they contain private keys. New MSIs preserve the profile on upgrade.
+Install the verified MSI, approve UAC, then open **“AURA Split TR - Yapılandır”** from Start. Nothing is blocked until configured. Select WARP (accept its terms; registration can be refused), Proton or a single-peer WireGuard `.conf`. Disconnect other VPN tunnels first. `PostUp`/`PostDown` scripts are not executed. Check `status`, allow 1–2 minutes for connection, then fully restart Discord. Delete downloaded config copies after setup; they contain private keys. The v0.1.1-beta MSI upgrades over v0.1.0-beta without uninstalling first and preserves the profile.
 
 ### Commands, recovery and uninstall
 

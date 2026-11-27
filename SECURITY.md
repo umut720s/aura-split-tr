@@ -2,7 +2,7 @@
 
 ## Deneysel beta — doğrulama kapsamı
 
-**v0.1.0-beta üretime hazır değildir; exe/MSI imzasızdır ve bağımsız paket düzeyi doğrulaması yoktur.** Yalnızca tek Windows 11 x64 bilgisayarda test edildi. İlk kayıtlar IPv4-only Ethernet ve Kaspersky Plus açıkken alındı; sonraki R3/R4 denemeleri iki fiziksel adaptörü kapsar.
+**v0.1.1-beta üretime hazır değildir; exe/MSI imzasızdır ve bağımsız paket düzeyi doğrulaması yoktur.** Yalnızca tek Windows 11 x64 bilgisayarda test edildi. İlk kayıtlar IPv4-only Ethernet ve Kaspersky Plus açıkken alındı; sonraki R3/R4 denemeleri iki fiziksel adaptörü kapsar.
 
 [Canlı test kaydı](docs/testing/phase3_live_results_2026-11-22.md): WARP ve Proton ile örneklenen Discord TCP soketleri TUN üzerindeydi. Genel WireGuard seçeneğinde yine Proton `.conf` kullanıldı; diğer genel sağlayıcılar canlı test edilmedi. Stop/crash/ağ kesintisinde olumlu TCP örneklemesi, UDP/DNS/IPv6 veya açılış penceresi için izolasyon kanıtı değildir.
 
@@ -11,6 +11,8 @@ Run 4 dosya seçiciyi, başlangıç durumunu ve ağ kesintisi bildirimini doğru
 R3'te iki adaptörle DNS/İnternet kesildi; R4'te ikisi de İnternet erişimine sahipken sorun tekrarlanmadı. Sonradan eklenen sağlık tabanlı çıkış failover'ı **canlı test edilmedi**. Kesintide `aurasplit.exe stop` veya `disable` kullanın; ikincisi engelleri kaldırır ve Discord doğrudan bağlanabilir. Başka VPN istemcisinin tünelini aynı anda çalıştırmayın.
 
 [Ağ izolasyonu denetimi](docs/audits/network_isolation_audit.md) ve [iyileştirme planı — P0 progress](docs/audits/security_remediation_plan.md#p0-progress) açık bulguları korur. Deneysel yayın, güvenlik kabul kapısının geçildiği anlamına gelmez. [README — bilinen sınırlar](README.md#bilinen-sınırlar) kullanıcı kapsamını özetler. Zorlanmış MSI geri alma/kurtarma hata yolları, yerel IPv6 ve diğer makineler/antivirüsler canlıda doğrulanmadı.
+
+[Sürüm notları / Release notes](docs/RELEASE_NOTES_v0.1.1-beta.md)
 
 ## Tehdit modeli (özet)
 
@@ -56,7 +58,7 @@ R3'te iki adaptörle DNS/İnternet kesildi; R4'te ikisi de İnternet erişimine 
   bağımlılığıyla çalıştığını doğrular. Uymuyorsa MSI onarımını ister. Yeni profil ancak
   çalışan hizmet durdurulduktan sonra eskisinin yerine geçer. MSI hizmeti **El ile**
   başlatma türüyle kaydeder; yalnızca yapılandırma onu otomatik yapar.
-- **İmza.** **v0.1.0-beta dosyaları (exe ve MSI) Authenticode ile imzalı DEĞİLDİR.**
+- **İmza.** **v0.1.1-beta dosyaları (exe ve MSI) Authenticode ile imzalı DEĞİLDİR.**
   Windows SmartScreen ve antivirüs ürünleri uyarı verebilir. Her dosyanın SHA-256
   özetini aynı sürümün `SHA256SUMS.txt` dosyasıyla karşılaştırın ve GitHub derleme
   kaynağı doğrulamasını (build provenance attestation) yapın:
