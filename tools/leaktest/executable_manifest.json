@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "roots": [
+    "Discord",
+    "DiscordPTB",
+    "DiscordCanary",
+    "DiscordDevelopment"
+  ],
+  "path_regex": "(?i)\\\\AppData\\\\Local\\\\(?:(?:Discord|DiscordPTB|DiscordCanary|DiscordDevelopment)\\\\(?:Update\\.exe|Discord[^\\\\]*Setup[^\\\\]*\\.exe|app-[^\\\\]+\\\\(?:(?:Discord|DiscordPTB|DiscordCanary|DiscordDevelopment)\\.exe|(?:updater_launcher|DiscordSystemHelper|audio_effects_helper|gpu_encoder_helper)\\.exe|modules\\\\(?:discord_utils-[^\\\\]+\\\\discord_utils\\\\DiscordSystemHelper|discord_voice-[^\\\\]+\\\\discord_voice\\\\(?:audio_effects_helper|gpu_encoder_helper))\\.exe))|SquirrelTemp\\\\Discord[^\\\\]*Setup[^\\\\]*\\.exe)$"
+}

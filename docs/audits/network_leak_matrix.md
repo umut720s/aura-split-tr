@@ -119,3 +119,19 @@ Run 5'in paket sayılarına ilişkin kayıt, görev girdisinden farklı bir kan�
 - Browser kapsamı service stopped/crash/boot/TUN removal durumlarını gerçekten garanti edecek mi? İlgisiz browser sekmelerini direct tutarken bunun uygulanabilir kabul mekanizması henüz kanıtlanmadı.
 - Native IPv6, DoH/DoT/DoQ, ECH, QUIC, screen share ve başka AV/NIC ortamlarında hangi sınıf/protokol/pencere ölçümleri var? Mevcut kayıt bunların yerine geçmez.
 - Koruma açılmadan önce kurulmuş direct TCP/UDP bağlantıları nasıl ele alınacak? D'yi restart etmek browser/updater/helpers veya DNS için aynı korumayı kanıtlamaz.
+
+## Tooling update (P0-B)
+
+`tools/leaktest` now records all pktmon components in one session and exports each mapped physical NIC and the AURA TUN separately. Raw ETL, timestamps/edge text, drops, segment statistics and PID/executable/socket/peer timelines remain private outside Git. Each scenario requires direct and tunnel nonce controls with receiver correlation. Analysis reads the engine suffix/exact-host contract, applies PASS / FAIL / INCONCLUSIVE evidence gates, returns exit 0 only for completed analysis, and offers a separate allowlisted redacted export. Synthetic fixtures validate tooling, not network isolation. All real L1-L14 captures, boot/resume continuity and runtime TUN/endpoint mappings remain NOT TESTED; SEC-013/014 are not closed by this update.
+
+
+### L1 aktivasyon sınırı düzeltmesi
+
+Korumayı etkinleştirmeden fiziksel kaydı başlatın; güncel servis durumunda
+politika uygulandı + tünel açık bilgisini ve TUN bileşen eşlemesini doğruladıktan
+hemen sonra capture penceresinde A tuşuna basın. Araç UTC onay işaretini kaydeder;
+politika doğrulaması operatöre aittir. Senaryo uyaranları ve iki pozitif kontrol
+bu işaretten sonra yapılır. Önceki akışlar özel raporda baseline olarak kalır;
+işaret anından sonraki sızıntılar değerlendirilir. Eksik/geçersiz işaret
+INCONCLUSIVE'dur. Bu daraltılmış sonuç etkinleştirme öncesini kapsamaz.
+Sentetik sınır testleri mevcuttur; gerçek L1 ve aktivasyon işareti akışı **NOT TESTED**.

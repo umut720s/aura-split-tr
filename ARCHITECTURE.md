@@ -3,6 +3,55 @@
 Windows için yalnızca Discord trafiğini (uygulama + güncelleyici) bir WireGuard
 VPN tünelinden geçiren, arka planda Windows hizmeti olarak çalışan araç.
 
+## P0 hazır olma sözleşmesi
+
+`SERVICE_RUNNING`, `TUNNEL_INITIALIZED`, VPN probe ve `PROTECTION_READY` bağımsızdır.
+Hazır olmak için başarılı Apply, manifest ve tutulan kapsamın dört ALE katmanında
+commit sonrası readback, eksiksiz discovery/enrollment, tüm manifesti kapsayan tek
+dinamik izin ve eski akış kapısı gerekir. LUID bulunamaması başarısızdır. İlk Apply
+hatası mevcut blokları kaldırmaz; pending + 10 sn retry ve açık neden raporlanır.
+Her uzlaştırmada değişmeyen manifest için de readback yapılır. Readback mevcut
+deterministik anahtar, katman, action, persistent/disabled ve kayıtlı yolu denetler;
+tüm native koşul/weight/AppID içerik drift denetimi P1-C olarak açıktır.
+
+`internal/oldflow`, politika readback sonrasında her manifest yolu için başlangıç
+zamanı eşiği tutar. Eşikten önce başlamış tam manifest süreçleri kapanana kadar
+kapı bekler. TCP tablosu değişikliği veya otomatik süreç kapatma yoktur. Kimliği ya
+da başlangıcı okunamayan olası Discord süreçleri, çocukları ve daha önce ilgili
+gözlenen kimlikler çözülene veya envanterden kaybolana kadar bekleme nedenidir.
+İlgi geçmişi `(PID, oluşturulma zamanı)` ile tutulur; doğrulanmış yeni süreç eski
+PID'nin ilgisini devralmaz. Görüntüsü okunamayan, eşikten önce başlayan (veya
+başlangıcı okunamayan) ve ebeveyn zinciri bilinmeyen yabancı süreçler de bekletir;
+durum engelleyen PID/adı gösterir. Bu belirsizlik her snapshot'ta yeniden değerlendirilir.
+Discord'u tamamen kapatıp yeniden başlatmak ilgili süreçleri emekliye ayırır.
+İlgisiz erişilemeyen bir orphan da bekletebilir; bu durumda belirtilen sürecin
+kimliği çözülmeli veya süreç kapanmalıdır. Oluşturulma zamanı hiç okunamıyorsa
+iki snapshot arasındaki gizli çıkış/PID yeniden kullanımı ayırt edilemez.
+Bu kapı bilinmeyen okunabilir özel EXE'leri, launch yarışını veya örnekleme
+arasındaki ebeveyn değişimini bütünüyle çözmez; paket izolasyonu kanıtı değildir.
+Eşik her kesintisiz doğrulanmış enrollment nesline aittir. Yolun emekliye
+ayrılması/prune veya discovery/Apply/readback kaybı eşikleri iptal eder; Apply
+onarımından önce de eski kapsam okunur. Recover/servis yeniden başlatma yeni kapı
+kurar. Yeniden kaydedilen yol yeni eşik alır. Poll arası kaybolup geri yüklenen,
+hiç gözlenmeyen politika değişimi bu örneklemeyle tespit edilemez.
+Etkileşimli setup/start yalnızca açık `[y/N]` onayından sonra tam manifest yolunu
+aynı process handle üzerinden tekrar okuyup TerminateProcess uygular; klasör
+üyeliği ve ebeveyn ilişkisi kapatma yetkisi vermez. Her servis oturumu yeni kapı
+kurar. Bu yol eşliği yayıncı/imza veya paket sahipliği doğrulaması değildir.
+Süreç örneklemesi launch bariyeri veya paket izolasyonu kanıtı değildir.
+
+Executable sözleşmesinin tek kaynağı `internal/manifest` paketidir. Dört destekli
+kök, bilinen göreli yardımcı yollar ve destekli konumlardaki kurucular discovery,
+engine regex ve durum sınıflarında kullanılır. `manifest --json` ve üretilen
+`tools/leaktest/executable_manifest.json` aynı JSON'dur; eşlik testi drift'i reddeder.
+
+Desktop, updater, helpers, installers, routing fallbacks, browser Discord ve DNS
+ayrı raporlanır. `protected` yalnızca hazır manifest yollarını ifade eder; browser ve
+DNS best-effort / not-covered kalır. Genel izolasyon release kapısı kapalıdır.
+Kanonik olmayan eski kalıcı bloklar korunabilir; tünel permitleri yalnızca
+engine'in kanonik manifest regex'ine uyan yolları kapsar. Daraltılan eski permit
+yeni izin açılamasa da kapatılır; kapatma hatası hazır duruma geçişi engeller.
+
 ## Akış
 
 0. **Kurulum (Windows Installer):** kullanıcı `AuraSplitTR-<sürüm>-x64.msi` paketini kurar
@@ -34,11 +83,12 @@ VPN tünelinden geçiren, arka planda Windows hizmeti olarak çalışan araç.
    sıfırdan farklı kodla çıkar. Hizmetin penceresi yoktur.
 4. Hizmet, gömülü **sing-box** kütüphanesiyle bir TUN arayüzü açar.
    Yönlendirme kuralları:
-   - Yolu `\AppData\Local\Discord(PTB|Canary|Development)?\` altında olan her
-     süreç (Discord.exe, **Update.exe** = güncelleyici) → `wg` (WireGuard) çıkışı.
-   - `Discord.exe`, `DiscordPTB.exe`, `DiscordCanary.exe`, `DiscordDevelopment.exe`
-     (yalnızca adla; `Update.exe` adla eşlenmez), `Discord*Setup*.exe` kurulum
-     dosyaları (yol regex'i) ve `ExtraProcessNames` → `wg`.
+   - Tek executable manifestinin ürettiği tam yol regex'iyle eşleşen süreçler
+     → `wg` (WireGuard) çıkışı. Varsayılan dört Discord EXE adı ve
+     `Discord\w*Setup*.exe` kurucu regex'i (Downloads dahil) ayrıca yönlendirme
+     fallback'idir: tünel kipinde `wg`, block kipinde `reject`. Manifest dışında
+     `routed-not-fail-closed` olarak raporlanır; doğrulanmış koruma sayılmaz.
+     Kullanıcının `ExtraProcessNames` kuralları ayrıca → `wg`.
    - Discord alan adlarının tümü (`discord.com`, `discord.gg`, `discordapp.com/.net`,
      `discord.media`, `discordcdn.com`, `discordsays.com`, `dis.gd`, `discord.gift`,
      `discord.dev`, ... ve tam ad `discord-attachments-uploads-prd.storage.googleapis.com`)
@@ -134,13 +184,13 @@ gerçek `FindFirstChangeNotification` testi geçici klasörde); gerçek WFP ça�
   eklenir (anahtarı olan filtreyi eklemek etkisizdir), tutulan (istenmeyen ama programı
   var olan) devre dışı filtre kayıtlı yolundan yeniden oluşturulur (yol çözülemezse
   "çözülmemiş"). Devre dışı filtreler `Covered`/`Installed` sayısına girmez.
-- **Politika bütçesi:** mevcut + önerilen kalıcı politika en fazla `MaxPolicyApps` = 256
-  program, profil başına (`\AppData\Local\` öncesi yol) `MaxPolicyAppsPerProfile` = 32.
+- **Politika bütçesi:** mevcut + önerilen kalıcı politika en fazla `MaxPolicyApps` = 1024
+  program, profil başına (`\AppData\Local\` öncesi yol) `MaxPolicyAppsPerProfile` = 128.
   Önce kalan her mevcut engel sayılır (bütçeyi aşsa bile; yer açmak için hiçbir şey
   silinmez), sonra yeni programlar bütçe izin verdikçe eklenir; kalanlar
   `ApplyResult.OverBudget` / `IncompleteError.OverBudget` ile bildirilir, geçiş eksik
   sayılır. Dinamik izin (`PermitOnTunnel`) aynı bütçeyi uygular. Bulma da profil başına
-  32 yolda durur (`ErrCapReached`, diğer profiller etkilenmez).
+  128 yolda durur (`ErrCapReached`, diğer profiller etkilenmez).
 - **Silme kuralı (`Apply(yollar, kip)`):** `AddOnly` hiçbir filtre silmez. `Authoritative`
   yalnızca (a) tarama hatasız bittiyse (sınır aşımı yok, her klasör okunabildi) ve (b) her
   yolun uygulama kimliği okunabildiyse siler; (c) kaydedilmiş yolu diskte hâlâ var olan
@@ -154,10 +204,13 @@ gerçek `FindFirstChangeNotification` testi geçici klasörde); gerçek WFP ça�
 - Program bulma: `HKLM\...\ProfileList` (yalnızca `S-1-5-21-*` ve `S-1-12-1-*`; okunamayan
   kullanıcı girdisi hata sayılır), her profilde
   `AppData\Local\{Discord,DiscordPTB,DiscordCanary,DiscordDevelopment}\Update.exe` ve
-  **diskteki tüm** `app-*` klasörlerindeki `Discord*.exe` (en yeniden eskiye; sürüm sınırı
-  yok). Yol bileşenlerinden hiçbiri reparse point olamaz. Sınırlar: 64 profil, 16 exe/klasör,
-  profil başına 32, toplam 256 yol; sınır aşılırsa `ErrCapReached` döner (geçiş eksik, silme
-  yok), sessizce atlanmaz.
+  dört destekli kurulum kökündeki ve SquirrelTemp içindeki `Discord*Setup*.exe`, her
+  `app-*` içindeki bilinen istemci/yardımcı EXE'ler ve manifestte belirtilen
+  discord_utils/DiscordSystemHelper, discord_voice/audio_effects_helper ve
+  gpu_encoder_helper göreli yolları. Yol bileşenleri reparse point olamaz. Sınırlar: 64 profil,
+  16 exe/klasör, modül seviyesi başına 64 giriş, kök listelemelerinde 4096 giriş,
+  profil başına 128, toplam 1024 yol; sınır/okuma hatası `ErrCapReached`/incomplete
+  üretir. Derin veya özel konumlar, Temp child launch kapsamı dışarıdadır.
 - Uzlaştırma tetikleri: hizmet başında; her Discord kurulum klasörü (alt ağaç) ve her
   profilin `AppData\Local` klasörü (yalnızca doğrudan alt klasörler: yeni kurulum)
   `FindFirstChangeNotification` ile izlenir, değişiklikten 300 ms sonra uzlaştırılır
@@ -168,9 +221,8 @@ gerçek `FindFirstChangeNotification` testi geçici klasörde); gerçek WFP ça�
   aralıklarla yeniden kurar (son yeniden kurulumdan 60 sn sonra gelen hata sayacı sıfırlar)
   ve ardından bir uzlaştırma tetikler; işletim sistemi izleyicisi kendiliğinden biterse
   (tüm bekleme grupları bitti) bu da hata sayılır. Koruma eksikken (tarama hatası, çözülmemiş program, izin
-  eksik/başarısız) 10 sn'de bir. Uzlaştırma yalnızca son geçiş tamsa, envanter
-  değişmediyse ve izin her şeyi kapsıyorsa atlanır; çözülmemiş programlar ve başarısız
-  izin envanter değişmese de her seferinde yeniden denenir.
+  eksik/başarısız veya eski akış kapısı bekliyor) 10 sn'de bir. Değişmeyen envanterde de
+  Apply/readback tekrarlanır; çözülmemiş programlar ve başarısız izinler yeniden denenir.
 - **Kalan güncelleme yarışı (mimari sınır):** kurallar tam yola bağlıdır; gelecekteki bir
   sürüm ilk bağlantısından önce garanti olarak kapsanamaz. (1) Yeni `app-*` sürümü
   izleyicinin uzlaştırması bitmeden (~1 sn) çalışır **ve** aynı anda tünel/hizmet
@@ -258,7 +310,9 @@ Her durum ayrı satırdadır; birbirinden bağımsızdır ve aynı anda EVET ola
 | `VPN_CONNECTIVITY_VERIFIED` | son deneme tünelin içinden başarılı | durum dosyası |
 | `VPN_DEGRADED` | art arda 1–2 deneme başarısız, ya da WARP `warp=off` döndü | durum dosyası |
 | `VPN_DISCONNECTED` | fiziksel bağlantı yok veya art arda ≥ 3 deneme başarısız | durum dosyası |
-| `PROTECTION_ACTIVE` | kalıcı WFP politikası (sağlayıcı + alt katman) yüklü; ek olarak dinamik tünel izninin açık / açık-EKSİK (N/M program) / kapalı olduğu ve `Kapsam: TAM/EKSİK` (neden) | canlı WFP sorgusu (`Installed`), olmazsa hizmetin bildirdiği; kapsam ve izin hizmetin bildirdiği |
+| `PERSISTENT_POLICY` | politika varlığı/sayısı; hazır olma kanıtı değildir | WFP `Installed`, olmazsa hizmetin bildirimi |
+| `PROTECTION_READY` | manifest Apply/readback + pending yok + tam tünel izni + eski akış kapısı | güncel hizmet durum dosyası |
+| `OLD_FLOW_GATE` | politika sonrası korunan süreç kalmadığı gözlendi | oldflow, durum dosyası |
 
 VPN_* durumları yalnızca `TUNNEL_INITIALIZED` iken anlamlıdır; tünel durumu değişince
 sıfırlanır. "Doğrulandı" asla süreç varlığından çıkarılmaz.

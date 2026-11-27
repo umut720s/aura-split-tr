@@ -10,12 +10,14 @@ import (
 	"sync"
 
 	"aurasplit/internal/engine"
+	"aurasplit/internal/oldflow"
 	"aurasplit/internal/wfp"
 )
 
 // Seams for the WFP fail-closed policy; tests replace them with fakes so
 // no real WFP call is ever made by a unit test.
 var (
+	checkOldFlows   func([]string) (bool, string)
 	newPolicy       = func() wfp.Policy { return wfp.New() }
 	discoverDiscord = wfp.Discover
 	tunnelLUID      = wfp.TunnelLUID
@@ -37,14 +39,18 @@ type protection struct {
 // it: within about a second of a change in a Discord directory (watcher),
 // every rescanInterval as a backstop, and every few seconds while
 // protection is incomplete. A failed first apply is logged and retried;
-// the tunnel still starts (sing-box keeps routing Discord into the
-// tunnel), but `status` shows the policy as missing or incomplete.
+// tunnel activation requires a subsequent complete apply and readback.
 func startProtection(ctx context.Context, logf func(level, msg string), onChange func(wfp.Status)) *protection {
 	pol := newPolicy()
 	if fw, ok := pol.(*wfp.Firewall); ok {
 		fw.Logf = logf
 	}
 	g := wfp.NewGuard(pol, discoverDiscord, logf, onChange)
+	gate := &oldflow.Gate{}
+	g.CheckOldFlows = func(paths []string) (bool, string) { return gate.Check(oldflow.WindowsSource{Manifest: paths}, paths) }
+	if checkOldFlows != nil {
+		g.CheckOldFlows = checkOldFlows
+	}
 	if err := g.Reconcile(); err != nil {
 		if errors.Is(err, wfp.ErrIncomplete) {
 			logf("WARN", "fail-closed WFP policy applied incompletely (add-only, retrying): "+err.Error())
@@ -84,11 +90,7 @@ func startProtection(ctx context.Context, logf func(level, msg string), onChange
 func (p *protection) onTunnelUp() (io.Closer, error) {
 	luid, err := tunnelLUID(engine.TunInterfaceName)
 	if err != nil {
-		if !p.guard.Status().Applied {
-			// Nothing blocks Discord yet, so the tunnel is usable without a
-			// permit; keep it rather than falling back to block mode.
-			return nil, nil
-		}
+		p.guard.ReportFailure("AURA TUN LUID bulunamadı; koruma hazır değil")
 		return nil, fmt.Errorf("find TUN interface %q: %w", engine.TunInterfaceName, err)
 	}
 	return p.guard.TunnelUp(luid)
@@ -108,12 +110,19 @@ func applyPolicyOnce() (int, error) {
 	if derr != nil {
 		mode = wfp.AddOnly
 	}
-	res, err := newPolicy().Apply(paths, mode)
+	pol := newPolicy()
+	res, err := pol.Apply(paths, mode)
 	if err != nil && !errors.Is(err, wfp.ErrIncomplete) {
 		return 0, err
 	}
 	if derr != nil {
 		err = errors.Join(fmt.Errorf("%w: discovery: %v", wfp.ErrIncomplete, derr), err)
+	}
+	if len(paths) == 0 {
+		err = errors.Join(err, fmt.Errorf("%w: manifest boş", wfp.ErrIncomplete))
+	}
+	if rerr := wfp.VerifyPolicy(pol, paths); rerr != nil {
+		err = errors.Join(err, fmt.Errorf("%w: readback: %v", wfp.ErrIncomplete, rerr))
 	}
 	return len(res.Covered), err
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/sagernet/sing-box/include"
 	"github.com/sagernet/sing/service"
 
+	"aurasplit/internal/manifest"
 	"aurasplit/internal/profile"
 )
 
@@ -120,10 +121,10 @@ func checkStructure(t *testing.T, p *profile.Profile, cfg []byte, mode Mode) {
 			t.Fatalf("discord rule action: %+v", rule)
 		}
 	}
-	if !contains(r[3].ProcessPathRegex, DiscordPathRegex) || !contains(r[3].ProcessPathRegex, DiscordInstallerRegex) {
+	if !contains(r[3].ProcessPathRegex, DiscordPathRegex) {
 		t.Fatalf("process path rule: %+v", r[3])
 	}
-	for _, n := range append(append([]string{}, DiscordProcessNames...), "Vesktop.exe") {
+	for _, n := range []string{"Vesktop.exe"} {
 		if !contains(r[4].ProcessName, n) {
 			t.Fatalf("process name rule lacks %s: %+v", n, r[4])
 		}
@@ -201,13 +202,13 @@ func domainMatches(r routeRule, host string) bool {
 }
 
 func TestProcessRegexes(t *testing.T) {
-	installer := regexp.MustCompile(DiscordInstallerRegex)
+	installer := regexp.MustCompile(DiscordPathRegex)
 	path := regexp.MustCompile(DiscordPathRegex)
 	for _, s := range []string{
-		`C:\Users\u\Downloads\DiscordSetup.exe`,
-		`C:\Users\u\Downloads\DiscordSetup (1).exe`,
-		`D:\x\DiscordPTBSetup.exe`,
-		`D:\x\discordcanarysetup.EXE`,
+		`C:\Users\u\AppData\Local\SquirrelTemp\DiscordSetup.exe`,
+		`C:\Users\u\AppData\Local\SquirrelTemp\DiscordSetup (1).exe`,
+		`D:\AppData\Local\DiscordPTB\DiscordPTBSetup.exe`,
+		`D:\AppData\Local\DiscordCanary\discordcanarysetup.EXE`,
 	} {
 		if !installer.MatchString(s) {
 			t.Errorf("installer regex misses %s", s)
@@ -285,6 +286,123 @@ func assertNoSecret(t *testing.T, p *profile.Profile, err error) {
 			if strings.Contains(u.Error(), s) {
 				t.Fatal("wrapped error leaks secret")
 			}
+		}
+	}
+}
+
+// Empty optional basename rules must never become unconditional WG/reject rules.
+func TestManifestOnlyRulesKeepUnrelatedDirect(t *testing.T) {
+	p := testProfile(t, profile.ProviderWARP)
+	p.ExtraProcessNames = nil
+	for _, mode := range []Mode{ModeTunnel, ModeBlock} {
+		raw, err := buildConfig(p, logOptions{}, mode, netEnv{hostIPv6: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var c config
+		if err := stdjson.Unmarshal(raw, &c); err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range c.Route.Rules[3:] {
+			if len(r.ProcessPathRegex)+len(r.ProcessName)+len(r.Domain)+len(r.DomainSuffix) == 0 {
+				t.Fatal("unconditional protected route", r)
+			}
+		}
+		for _, r := range c.DNS.Rules {
+			if r.Server == TagDNSRemote || r.Action == "reject" {
+				if len(r.ProcessPathRegex)+len(r.ProcessName)+len(r.Domain)+len(r.DomainSuffix) == 0 {
+					t.Fatal("unconditional protected DNS", r)
+				}
+			}
+		}
+		if c.Route.Final != TagDirect || c.DNS.Final != TagDNSLocal {
+			t.Fatal("unrelated default changed")
+		}
+	}
+}
+
+func TestFallbackRoutingAndBlockMode(t *testing.T) {
+	p := testProfile(t, profile.ProviderWARP)
+	p.ExtraProcessNames = nil
+	for _, mode := range []Mode{ModeTunnel, ModeBlock} {
+		raw, err := buildConfig(p, logOptions{}, mode, netEnv{hostIPv6: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var c config
+		if err := stdjson.Unmarshal(raw, &c); err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range DiscordProcessNames {
+			found := false
+			for _, r := range c.Route.Rules {
+				if contains(r.ProcessName, name) {
+					found = true
+					if mode == ModeBlock && r.Action != "reject" || mode == ModeTunnel && (r.Action != "route" || r.Outbound != TagWG) {
+						t.Fatal(r)
+					}
+				}
+			}
+			if !found {
+				t.Fatal("missing fallback", name)
+			}
+		}
+		found := false
+		for _, r := range c.Route.Rules {
+			if contains(r.ProcessPathRegex, DiscordInstallerRegex) {
+				found = true
+				if mode == ModeBlock && r.Action != "reject" || mode == ModeTunnel && r.Outbound != TagWG {
+					t.Fatal(r)
+				}
+			}
+		}
+		if !found {
+			t.Fatal("missing installer fallback")
+		}
+		if !regexp.MustCompile(DiscordInstallerRegex).MatchString(`C:\Users\fixture\Downloads\DiscordSetup (1).exe`) {
+			t.Fatal("Downloads installer missed")
+		}
+	}
+}
+
+func TestWholeInstallRoutingBothModes(t *testing.T) {
+	p := testProfile(t, profile.ProviderWARP)
+	for _, mode := range []Mode{ModeTunnel, ModeBlock} {
+		raw, err := buildConfig(p, logOptions{}, mode, netEnv{hostIPv6: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var c config
+		if err := stdjson.Unmarshal(raw, &c); err != nil {
+			t.Fatal(err)
+		}
+		for _, root := range manifest.Roots() {
+			for _, suffix := range []string{`app-1\DiscordOther.exe`, `app-2\modules\future-1\future\new_helper.exe`, `future\worker.exe`} {
+				image := `C:\Users\fixture\AppData\Local\` + root + `\` + suffix
+				if manifest.Accepts(image) || manifest.Exact(image, []string{image}) {
+					t.Fatal("routing expanded destructive eligibility", image)
+				}
+				matched := false
+				for _, r := range c.Route.Rules {
+					for _, expr := range r.ProcessPathRegex {
+						if !regexp.MustCompile(expr).MatchString(image) {
+							continue
+						}
+						matched = true
+						if mode == ModeBlock && r.Action != "reject" || mode == ModeTunnel && (r.Action != "route" || r.Outbound != TagWG) {
+							t.Fatal(mode, r)
+						}
+					}
+				}
+				if !matched {
+					t.Fatal("unrouted future helper", mode, image)
+				}
+			}
+		}
+	}
+	for _, root := range []string{"DiscordCustom", "DiscordOther", "DiscordPTBExtra", "Other"} {
+		if regexp.MustCompile(DiscordInstallDirectoryRegex).MatchString(`C:\Users\fixture\AppData\Local\` + root + `\app-1\future.exe`) {
+			t.Fatal("unsupported root", root)
 		}
 	}
 }

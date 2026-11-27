@@ -55,12 +55,14 @@ func (b *fakeBackend) AppID(path string) ([]byte, error) {
 // fakeSession applies changes to a copy during a transaction and commits
 // them atomically.
 type fakeSession struct {
-	bfe     *fakeBFE
-	id      int
-	dynamic bool
-	inTxn   bool
-	snap    *fakeBFE
-	closed  bool
+	bfe        *fakeBFE
+	id         int
+	dynamic    bool
+	inTxn      bool
+	snap       *fakeBFE
+	closed     bool
+	closeErr   error
+	closeCalls int
 }
 
 func (s *fakeSession) logf(f string, a ...any) { s.bfe.log = append(s.bfe.log, fmt.Sprintf(f, a...)) }
@@ -190,8 +192,12 @@ func (s *fakeSession) DeleteProvider() error {
 func (s *fakeSession) Close() error {
 	s.bfe.mu.Lock()
 	defer s.bfe.mu.Unlock()
+	s.closeCalls++
 	if s.closed {
 		return nil
+	}
+	if s.closeErr != nil {
+		return s.closeErr
 	}
 	s.closed = true
 	s.logf("close dynamic=%v", s.dynamic)

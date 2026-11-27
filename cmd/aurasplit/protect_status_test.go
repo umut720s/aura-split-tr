@@ -51,10 +51,14 @@ func (p *fakeCmdPolicy) PermitOnTunnel(luid uint64, paths []string) (wfp.Permit,
 func (p *fakeCmdPolicy) RemoveAll() error                  { p.add("remove"); return nil }
 func (p *fakeCmdPolicy) Installed() (bool, int, error)     { return p.applied > 0, p.applied, nil }
 func (p *fakeCmdPolicy) Snapshot() (bool, []string, error) { return false, nil, nil }
+func (p *fakeCmdPolicy) Verify([]string) error             { return nil }
 
 func withFakeProtection(t *testing.T, luidErr error) *fakeCmdPolicy {
 	t.Helper()
 	p := &fakeCmdPolicy{}
+	oldCheck := checkOldFlows
+	checkOldFlows = func([]string) (bool, string) { return true, "test gate" }
+	t.Cleanup(func() { checkOldFlows = oldCheck })
 	oldNew, oldDisc, oldLUID, oldWatch := newPolicy, discoverDiscord, tunnelLUID, runWatcher
 	t.Cleanup(func() { newPolicy, discoverDiscord, tunnelLUID, runWatcher = oldNew, oldDisc, oldLUID, oldWatch })
 	runWatcher = func(ctx context.Context, _ func(), _ func(string, string)) { <-ctx.Done() }
@@ -167,7 +171,7 @@ func TestDescribeStatus(t *testing.T) {
 	tunnel := &tunnelState{
 		State: string(engine.StateTunnelStarted), Time: now,
 		Connectivity: string(engine.ConnVerified), ConnectivityTime: now, ConnectivityOK: now,
-		Protection: &protectionState{Applied: true, Apps: 2, Complete: true, Permit: true, PermitApps: 2, PermitComplete: true},
+		Protection: &protectionState{Ready: true, OldFlowsComplete: true, Applied: true, Apps: 2, Complete: true, Permit: true, PermitApps: 2, PermitComplete: true},
 	}
 	partial := &tunnelState{
 		State: string(engine.StateTunnelStarted), Time: now,
@@ -180,13 +184,13 @@ func TestDescribeStatus(t *testing.T) {
 		not  []string
 	}{
 		{"all active", statusInput{scmState: "running", scmRunning: true, state: tunnel, policyKnown: true, policyInstalled: true, policyApps: 2},
-			[]string{"SERVICE_RUNNING:           EVET", "TUNNEL_INITIALIZED:        EVET", "VPN_CONNECTIVITY_VERIFIED", "PROTECTION_ACTIVE:         EVET", "tünel izni: açık (2 program)", "Kapsam:                  TAM", "TÜNELDEN (tünel dışında engelli)"}, []string{"EKSİK"}},
+			[]string{"SERVICE_RUNNING:           EVET", "TUNNEL_INITIALIZED:        EVET", "VPN_CONNECTIVITY_VERIFIED", "PROTECTION_READY:          EVET", "tünel izni: açık (2 program)", "Kapsam:                  TAM"}, []string{"TÜNELDEN"}},
 		{"incomplete coverage and partial permit", statusInput{scmState: "running", scmRunning: true, state: partial, policyKnown: true, policyInstalled: true, policyApps: 3},
-			[]string{"tünel izni: açık, EKSİK (2/3 program", "Kapsam:                  EKSİK", "unresolved", "izni eksik"}, []string{"Kapsam:                  TAM", "TÜNELDEN (tünel dışında engelli)"}},
+			[]string{"tünel izni: açık, EKSİK (2/3 program", "Kapsam:                  EKSİK", "unresolved", "PROTECTION_READY:          HAYIR"}, []string{"Kapsam:                  TAM", "TÜNELDEN"}},
 		{"stopped, policy installed", statusInput{scmState: "stopped", policyKnown: true, policyInstalled: true, policyApps: 2},
-			[]string{"SERVICE_RUNNING:           HAYIR", "TUNNEL_INITIALIZED:        HAYIR", "denetlenmiyor", "tünel izni: kapalı", "ENGELLİ"}, []string{"VERIFIED"}},
+			[]string{"SERVICE_RUNNING:           HAYIR", "TUNNEL_INITIALIZED:        HAYIR", "denetlenmiyor", "tünel izni: kapalı", "PROTECTION_READY:          HAYIR"}, []string{"VERIFIED"}},
 		{"stopped, no policy", statusInput{scmState: "stopped", policyKnown: true},
-			[]string{"PROTECTION_ACTIVE:         HAYIR", "DOĞRUDAN"}, nil},
+			[]string{"PROTECTION_ACTIVE:         HAYIR", "PROTECTION_READY:          HAYIR"}, nil},
 		{"policy unknown", statusInput{scmState: "running", scmRunning: true, stateNote: "x"},
 			[]string{"TUNNEL_INITIALIZED:        bilinmiyor", "PROTECTION_ACTIVE:         bilinmiyor"}, nil},
 		{"degraded", statusInput{scmState: "running", scmRunning: true, policyKnown: true, policyInstalled: true, state: &tunnelState{
@@ -195,7 +199,7 @@ func TestDescribeStatus(t *testing.T) {
 			[]string{"VPN_DEGRADED", "art arda 2 başarısız", "timeout"}, []string{"VERIFIED"}},
 		{"not yet probed", statusInput{scmState: "running", scmRunning: true, policyKnown: true, policyInstalled: true, state: &tunnelState{
 			State: string(engine.StateTunnelStarted), Time: now}},
-			[]string{"henüz doğrulanmadı", "ENGELLİ"}, []string{"VERIFIED"}},
+			[]string{"henüz doğrulanmadı", "PROTECTION_READY:          HAYIR"}, []string{"VERIFIED"}},
 	}
 	for _, c := range cases {
 		out := strings.Join(describeStatus(c.in, time.UTC), "\n")

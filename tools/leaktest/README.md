@@ -1,112 +1,257 @@
-# AURA Split TR — fiziksel NIC sızıntı testi
+# Leak evidence: P0-B / SEC-013, SEC-014
 
-Bu araçlar yalnızca Ethernet üzerindeki **görünür ad göstergelerini** ölçer.
-Sıfır gösterge, sızıntı olmadığının kesin kanıtı değildir. Gerçek capture burada
-çalıştırılmadı. Windows 11 x64, Windows PowerShell 5.1 ve Python 3 stdlib yeterli;
-Npcap/Wireshark, paket kurulumu veya analiz sırasında ağ erişimi gerekmez.
+These tools classify **one reviewed scenario window**, not a release-wide security
+guarantee. Use an isolated Windows test environment. Capture requires Administrator
+and exclusive use of pktmon; it removes existing pktmon filters. It never modifies
+the service, routing, WFP or VPN configuration or performs scenario disruptions.
 
-## Çalıştırma (bakımcı)
+## Capture privately
 
-Capture için **yönetici olarak açılmış Windows PowerShell** kullanın. Mevcut bir
-pktmon oturumu olmamalı: script pktmon'u durdurur ve tüm global filtreleri siler.
-`aurasplit.exe` PATH'te, mevcut dizinde veya `%ProgramFiles%\AuraSplitTR` altında
-olmalı. Script AURA servis durumunu değiştirmez. Başka konumdaysa önce o dizine geçin.
+Choose an access-restricted folder **outside the repository**. A new private run
+folder gets an ACL allowing the invoking administrator and SYSTEM. No profiles,
+private keys, process command lines or environment inventories are read. Full packet
+payloads can contain application secrets; use synthetic accounts/data and avoid
+PowerShell transcription. Never pass keys or whole configurations to these tools.
 
-```powershell
-# Repo kökünden, yönetici PowerShell'de; komut çalışırken senaryoyu uygulayın.
-.\tools\leaktest\capture.ps1 -Scenario L1 -Seconds 120 -Adapter Ethernet -OutDir C:\AuraTest\evidence\leak
-```
-
-Betik fiziksel adaptörü `Get-NetAdapter -Physical` ile doğrular; MAC adresini
-`pktmon comp list --json`, desteklenmiyorsa `pktmon list` ile eşleştirir.
-Tekil component ID bulunamazsa yakalama başlamaz. Port/adres filtresi eklenmez:
-`--comp <id>` fiziksel NIC kapsamını belirler, DNS/TLS/IPv6'nın tamamı incelenebilir.
-256 bayt snaplen, 1024 MB segment eşiği ve multi-file modu kullanılır; dönen/eski
-paketleri silen circular mod kullanılmaz. Birden çok segment oluşursa kısmi analiz
-üretmek yerine betik hata verir; daha kısa süreyle tekrarlayın. Pktmon aynı paketi
-birden çok yönde/kenarda gösterebilir: sayılar dosyadaki kayıt sayılarıdır.
-
-Başarıda `.pcapng` ve aynı taban adında `.json` metadata kalır, ETL silinir;
-son satır pcapng yoludur. Metadata `Sunucu:` satırındaki IP:port'u, adaptör IP'lerini
-ve başlangıç/bitiş zamanını içerir. Endpoint okunamazsa uyarı verir ve hiçbir
-akış beyaz listeye alınmaz (özellikle servis durmuşken mümkün). Status hostname
-döndürürse çevrimdışı çözümleme yapılmaz. Metadata eksik endpoint'i elle doldururken
-**testteki gerçek WireGuard IP ve portunu** kullanın. `wireguard_endpoint` biçimi:
-`{"ip":"198.51.100.9","port":51820}`. Yalnız bu uzak uçla UDP trafiği istisnadır;
-aynı IP'ye TCP veya farklı porta UDP istisna değildir. Endpoint değişirse yeni capture
-alın; tek sidecar tek endpoint içindir.
-
-Hata/iptal sırasında `finally` içinde stop ve filtre temizliği ayrı ayrı denenir.
-Başarısız dönüşüm/çoklu segment durumunda özel ETL dosyaları hata incelemesi için
-kalır; bunları paylaşmayın. Terminalin zorla öldürülmesi veya güç kesilmesinde
-`finally` garantisi yoktur; bakımcı `pktmon stop` ve `pktmon filter remove` uygulamalıdır.
-
-Analiz yükseltme gerektirmez:
+Inspect `Get-NetAdapter` and `pktmon list --all`. Verify the AURA TUN's component ID
+independently from physical NICs; `-TunComponentId` is an operator-supplied mapping,
+not automatic proof. Physical capture starts without an initial TUN. Activate protection only after the capture-active message. Supply the verified TUN component later with `-TunComponentFile <private-json>` containing `{"component_id":42}`, or a previously verified `-TunComponentId`. Snapshots attach TUN without restarting the all-component recorder. Unsupported Wintun
+visibility needs a validated alternative recorder; this tool stays INCONCLUSIVE.
+Supply the actual **runtime resolved peer literal IP and UDP port**, independently
+verified against engine/provider telemetry. A profile hostname's DNS result may
+differ. Optional private `-PeerFile` contains only `{"ip":"literal","port":51820}`;
+these allowlisted fields are reread each sample. Update on runtime peer changes.
 
 ```powershell
-python -I .\tools\leaktest\analyze.py C:\AuraTest\evidence\leak\L1_<timestamp>_<id>.pcapng
-# İsteğe bağlı: --metadata <sidecar.json> --json <report.json> --local-ip 192.0.2.10
-# Sentetik testler; gerçek capture/ağ yok:
-Set-Location .\tools\leaktest
-python -I -m unittest
+.\tools\leaktest\capture.ps1 -Scenario L1 -Seconds 240 `
+    -OutDir E:\PrivateEvidence -TunComponentFile E:\PrivateEvidence\tun-component.json `
+    -PeerIP <runtime-peer-IP> -PeerPort <runtime-peer-port>
 ```
 
-Analizör her seferinde bir capture işler; varsayılan JSON raporu
-`<capture>.report.json`, metadata `<capture>.json` olur. pcapng (iki byte order,
-çoklu section/interface, EPB/SPB/eski packet block) ve klasik pcap (mikro/nanosaniye),
-Ethernet, iç içe VLAN, IPv4, IPv6 uzantıları, UDP/TCP desteklenir. DNS UDP/TCP 53
-sorguları, TCP'nin ilk ClientHello SNI'si (her port), ilk HTTP/1.x istek Host'u ve
-UDP 443 aday akışları raporlanır. TCP sıra numarasıyla sınırlı birleştirme,
-tekrar iletim ve sırasız segment desteği vardır. DNS/SNI/Host kayıtları akış/ad
-bazında tekilleştirilir; toplam paket sayısı tekilleştirilmez. IPv6 ND/MLD yerel
-kontrol gürültüsü ayrı sayılır; diğer IPv6 paketleri ana IPv6 sayacındadır.
+Use the new `L1_<random>` folder for controls. One global recorder captures all
+components, including newly active NICs. Every mapped physical NIC and the TUN
+are converted **separately**, for every segment. All active physical NICs count,
+including secondary Ethernet/Wi-Fi/mobile; ambiguous MAC mapping is incomplete.
 
-Çıkış kodları: **0** görünür Discord göstergesi yok; **2** WG akışı dışında
-Discord DNS/SNI/Host var; **1** dosya/metadata/rapor yazma veya capture formatı hatası.
-L2'de bilinen DNS sınırlaması da **2** üretir; sessizce PASS'e çevrilmez.
-Kırpılmış paketler format hatası sayılmaz, kapsam uyarısıyla raporlanır.
+Exact native commands, also recorded with UTC invocation times in `commands.jsonl`:
 
-## Senaryolar
+```text
+pktmon list --all
+pktmon filter remove
+pktmon start --capture --comp all --type all --pkt-size 0 --flags 0x033 --file-name <run>\capture.etl --file-size 1024 --log-mode multi-file
+pktmon counters --json
+pktmon stop
+# Every segment, every mapped component C:
+pktmon etl2txt <segment.etl> --out <segment.etl.txt> --timestamp --metadata --verbose
+pktmon etl2txt <segment.etl> --stats
+pktmon etl2pcap <segment.etl> --component-id C --out <segment>-ifI-cC.pcapng
+pktmon etl2pcap <segment.etl> --component-id C --drop-only --out <segment>-ifI-cC-drops.pcapng
+```
 
-Her senaryoyu ayrı capture ile çalıştırın; capture başladıktan sonra eylemi yapın.
-Servis kontrol komutlarını bakımcı ayrı terminalde uygular. Tablo beklentileri
-ölçülmüş sonuç değildir; test planının izin/ortam kuralları ayrıca geçerlidir.
+`etl2pcap` produces **pcapng**. Conversion loses component/stack/drop context:
+retain ETLs, verbose edge text, statistics, drop-only files and mappings together.
+See Microsoft's [conversion contract](https://learn.microsoft.com/windows-server/networking/technologies/pktmon/pktmon-pcapng-support)
+and [capture options](https://learn.microsoft.com/windows-server/administration/windows-commands/pktmon-start).
 
-| Senaryo | İşlem | Beklenti / kayıt |
-|---|---|---|
-| L1 | Servis çalışırken Discord'u açın, 30 saniye ses kanalına katılın; ilgisiz bir site açın. | Ethernet'te Discord DNS/SNI/Host yok; WG endpoint paketleri **var**. WG sayısı 0 ise test kanıtı yetersizdir; analizör bunu otomatik PASS saymaz. |
-| L2 | Bakımcı `aurasplit.exe stop` uygular; capture sırasında Discord'u açar. | Discord TLS/SNI/Host yok. Windows DNS Client üzerinden Discord DNS adları **görünebilir**: bilinen sınırlama, adları ve kod 2'yi kaydedin. |
-| L3 | Servis çalışırken capture boyunca kabloyu çıkarıp tekrar takın, Discord bağlantısını gözleyin. | Bağlantı kesintisinde/yeniden kurulurken Discord DNS/SNI/Host fiziksel NIC'e kaçmamalı; zamanları ve WG'nin geri dönmesini kaydedin. |
-| L4 | Servis çalışırken tarayıcıdan `https://discord.com` açın. | Görünür Discord SNI Ethernet'te yok. ECH/QUIC etkinse SNI görünmemesiyle yönlendirme doğrulanamaz; bunu kaydedin. |
+`run.json` lists interface index/GUID/component, addresses and all segments.
+`snapshots.jsonl` records UTC adapters/routes, peer endpoints, PID/exe/start time,
+TCP tuples and UDP local endpoints/owners every second by default, preserving
+endpoint changes. `process-events.jsonl` records observed starts/stops: stop is a
+sampling bound, not exact OS exit time; a process present at the end has no invented
+stop. Short-lived sockets/processes may be missed. Denied exe/start-time access,
+PID reuse or ambiguous wildcard UDP ownership cannot yield trusted attribution.
 
-## Sınırlar ve gizlilik
+Packet reports preserve timestamps, pcapng interface/direction flags and mapped NIC
+identity. Where native direction flags are absent, direction is derived from that
+NIC's addresses and its basis reported. Raw verbose text preserves Tx/Rx/edge data.
+Review final physical egress edges (or correlate an external recorder), particularly
+with offloads, relays, AV, virtual switches and TUN recreation. Sampling cannot
+rule out sub-sample identity changes. Never reuse a TUN component by alias alone.
 
-- **QUIC SNI çözümlenmez:** Initial secrets DCID'den türetilebilir, ancak header
-  protection AES-128-ECB ve payload AES-128-GCM gerektirir; Python stdlib AES sağlamaz.
-  UDP hedef port 443 akışları hedef IP ile `sni: "unparsed"` olarak listelenir;
-  bunların QUIC olduğu veya Discord'a ait olduğu iddia edilmez.
-- 256 bayt her DNS sorusuna/ClientHello'ya yetmez. SNI uzantısı erken ve tam ise
-  kaydın kalanı kırpılmışken de okunabilir. Sonraki TCP paketleri kayıp baytları
-  tamamlayamaz. ECH, DoH/DoT, HTTP/2/3, IP fragmentleri, capture öncesi kurulmuş
-  bağlantılar, önbellek ve paket kaybı adları gizleyebilir. IPv6 sayısı tek başına
-  Discord sızıntısı değildir. DNS bulgusu bağlantı kurulduğunu kanıtlamaz.
-- TCP birleştirme yön başına 256 KiB / 2048 segment ve toplam 4096 akışla sınırlı;
-  atlanan baytlar/gap'ler uyarılır. IP fragmentleri sayılır, birleştirilmez.
-- Capture ve sidecar IP'ler/ziyaret edilen adlar içerir. **Repo dışında** tutun;
-  script repo içi OutDir'i reddeder. Ham ETL/pcapng veya sidecar paylaşmayın.
-  Yalnız **`.report.json`** paylaşın: sidecar'daki yerel IP'ler `<local>` olur;
-  sidecar/local-ip yoksa güvenli varsayılan tüm IP'leri maskeler. Ek yerel
-  adresler için `--local-ip` tekrarlanabilir. Host adları ve uzak IP'ler de özel
-  bilgi olabilir; paylaşmadan önce raporu inceleyin. Script paket payload'larını
-  yazdırmaz; analizör sadece çıkarılan DNS/SNI/Host adlarını gösterir.
+## Two positive controls in EVERY scenario
 
-## English quick start
+Use separate non-Discord test executables and a maintainer-owned remote UDP
+receiver. Run both controls sequentially in the healthy period after the activation marker
+**within the same capture**, and again after recovery. They need not succeed during a VPN cut.
 
-Maintainer only: run `capture.ps1 -Scenario L1` in elevated Windows PowerShell;
-perform L1–L4 above during capture. Analyze offline, unelevated with
-`python -I tools/leaktest/analyze.py <capture.pcapng>`.
-Run synthetic tests from `tools/leaktest` with `python -I -m unittest`.
-Exit 0 = no visible Discord indicators, 2 = Discord DNS/SNI/Host outside the WG
-endpoint UDP flow, 1 = parse/I/O error. QUIC SNI, ECH and encrypted DNS remain blind
-spots; a clean report does not prove absence of leaks. Keep captures and metadata
-outside Git; share only the reviewed, local-IP-masked `.report.json`.
+On a clock-synchronized remote host (allow only intended test traffic):
+
+```text
+python -I -B receiver.py --bind <receiver-IP> --port 9000 --expected-tunnel-source <verified-VPN-exit-IP> --seconds 900 --out <new-private-receipts.json>
+```
+
+Independently verify the VPN exit IP; it must differ from the direct public source.
+The receiver records nonce/source/time without keys. On Windows run **unenrolled**
+`powershell.exe` for direct, and a **distinct existing executable already configured
+to use WG** for tunnel (for example `pwsh.exe` in the existing profile's
+`extra_process_names` test setting, only in the isolated environment):
+
+```powershell
+powershell.exe -NoProfile -File .\tools\leaktest\control.ps1 -Mode direct `
+    -RunDir <private-run-folder> -LocalIP <physical-local-IP> `
+    -RemoteIP <owned-receiver-IP> -RemotePort 9000
+pwsh.exe -NoProfile -File .\tools\leaktest\control.ps1 -Mode tunnel `
+    -RunDir <private-run-folder> -LocalIP <TUN-local-IP> `
+    -RemoteIP <owned-receiver-IP> -RemotePort 9000
+```
+
+Binding a TUN address **does not guarantee tunnelling**. Tools do not edit profiles
+or enroll executables. Keep the direct executable unenrolled; do not enroll shared
+production shells. Without a configured independent tunnel process, INCONCLUSIVE.
+
+The sender holds UDP open and sends a random nonce for 8 seconds; `controls.jsonl`
+records PID/start-time, tuple, nonce and UTC interval. Direct requires that nonce
+with the recorded non-Discord owner on a physical NIC. Tunnel requires it on TUN,
+no plaintext nonce flow on any physical NIC, WireGuard type-4 UDP transport to the
+then-current peer during its interval, and remote nonce telemetry from the verified
+VPN exit. Handshake/keepalive alone is insufficient. Inspect receiver records and
+merge `tunnel_receipts` into private review JSON. This is correlation evidence,
+not WG decryption; review timestamps, edges and concurrent flows too.
+
+## Analyze, then review
+
+```powershell
+python -I -B tools/leaktest/analyze.py <private-run-folder>\run.json
+# Inspect PRIVATE report/ETLs/stats/counters and receiver/client telemetry.
+# Create private review.json; use NEW outputs (no evidence overwrites):
+python -I -B tools/leaktest/analyze.py <private-run-folder>\run.json `
+    --review <private-review.json> --json <new-private-report.json> `
+    --export <new-redacted-export.json>
+```
+
+First analysis intentionally returns INCONCLUSIVE. Review fields are explicit
+operator assertions backed by retained evidence; they cannot override machine gates:
+
+```json
+{
+  "loss_checked": true, "capture_loss": false,
+  "coverage_checked": true, "scenario_stimulus_observed": true,
+  "encrypted_metadata_checked": true, "outer_correlation_checked": true,
+  "flow_labels": {"packet-record-id": "unrelated"},
+  "tunnel_receipts": {"control-nonce": {
+    "received_via_tunnel": true, "evidence": "receiver-records-sha256:..."
+  }}
+}
+```
+
+Check EVERY segment's ETW buffer/event loss, all NIC/TUN mappings/edges throughout
+the window, clocks, actual scenario/class/protocol stimuli, encrypted DNS/ECH/QUIC
+caller telemetry and receiver correlation. Unknown loss is not zero. Packet drops
+and recorder loss differ; either makes this tool INCONCLUSIVE, even intentional
+policy drops. Label stable packet-record IDs from unchanged inputs `discord` or
+`unrelated` only with retained caller/endpoint evidence. Browser or engine ownership
+alone cannot establish unrelated encrypted traffic; relay flows need original
+caller telemetry. Unknown shared-CDN traffic must not be labelled benign.
+
+- **PASS:** both controls, all machine gates and explicit evidence reviews passed;
+  all physical outbound flows attributed/qualified and no protected escape in
+  this scenario window. Does not transfer to other classes/protocols/variants.
+- **FAIL:** complete reviewed evidence contains an attributed protected physical
+  flow or an attributed flow carrying a related name/destination.
+- **INCONCLUSIVE:** empty/missing interface capture, incomplete run/inventory,
+  unknown loss/drop evidence, drops/truncation/fragments, parser gaps, unknown
+  direction/owner, opaque unreviewed traffic, absent controls or scenario telemetry.
+  These gates take precedence over FAIL; confirmed offending records remain in
+  `leaks` for investigation.
+
+No Discord domain/SNI seen is never sufficient for PASS. Inventory is read directly
+from `internal/engine/config.go`: suffix `DiscordDomains` plus exact `DiscordHosts`.
+The upload host does not widen to `storage.googleapis.com` or `googleapis.com`.
+Keep that source available offline. QUIC/ECH/encrypted DNS are not decrypted.
+Unknown flows to related destinations stay INCONCLUSIVE.
+
+Exit **0 means only analysis ran**, regardless of result. Exit 1 means invalid
+inputs or read/write failure. Inspect `result`, never infer security from exit code.
+
+## L1..L14 windows
+
+Separate runs per variant; both controls and private UTC stimulus notes each time.
+Follow all class/protocol requirements in `docs/audits/network_leak_matrix.md`.
+Faults are performed externally by the maintainer, never by these scripts.
+
+| Scenario | Seconds | Required actions/evidence |
+|---|---:|---|
+| L1 enable/baseline | 240 | All classes; pre-existing and new TCP/WebSocket/download/voice across enable. |
+| L2 service stop | 240 | Baseline, stop, all-class/DNS reconnect, restore; unrelated direct continues. |
+| L3 NIC handover | 300 | Both Ethernet/Wi-Fi, same-NIC DHCP/gateway change, first packets. |
+| L4 browser | 240 | Login/upload/download/CDN and unrelated tabs; HTTP3/WebRTC/proxy variants. |
+| L5 IPv6 | 240 | Real dual-stack/IPv4-only WG, unrelated IPv6-only target; zero traffic is not proof. |
+| L6 VPN-only cut | 900 | External peer-UDP-only drop; direct stays up; >=3 probe failures, rebuild/recovery. |
+| L7 crash | 240 | Exact SCM PID crash, active TCP/UDP, restart/reconnect and recovery controls. |
+| L8 update | 900 | Real update/installer, first new exe/network, each helper; absent stimulus inconclusive. |
+| L9 reboot | 120 pre + 240 post | External/validated boot recorder mandatory; post-logon is not boot coverage. |
+| L10 sleep/resume | 600 | External recorder for sleep gap/first resume packets, NIC/peer changes. |
+| L11 QUIC/UDP | 240 | Voice/share/helpers/HTTP3/WebRTC, all UDP ports/callers, fault variants separately. |
+| L12 DNS | 180 | Cold caches, A/AAAA UDP/TCP53, exact upload host, unrelated query; running/stopped. |
+| L13 encrypted DNS | 240 each | Native/browser DoH/DoT/DoQ/ECH; actual query-to-flow telemetry. |
+| L14 TUN removal | 600 | Isolated VM removal/recreation; physical stays up, new GUID/index/component/first flow. |
+
+This local recorder is not boot-capable and cannot certify sleep continuity or
+sub-sample identity changes. Those windows need external evidence; missing mapping
+or continuity remains INCONCLUSIVE. Recreated TUN needs a newly verified component.
+L9/L10 always include `external_continuity_not_analyzed`: this classifier does not
+ingest an external boot/resume recorder. Assess those full windows separately;
+an operator review flag cannot turn the local recording into continuous evidence.
+
+## Privacy and fixtures
+
+Raw captures/sidecars, receiver logs, reviews and detailed reports stay private
+outside Git. Separate export allowlists only canonical scenario/result, fixed
+reason codes and counts: no IPs (peer/remote/NAT included), usernames, hostnames,
+paths, PIDs, payloads, nonces or arbitrary review text. Console output uses the same
+allowlist. Inspect before sharing. Export is a summary, not replayable evidence;
+never paste private report sections into it.
+
+Fixtures use system temp; no admin, network or capture:
+
+```powershell
+python -I -B -m pytest tools/leaktest/test_analyze.py
+# If pytest is absent:
+python -I -B tools/leaktest/test_analyze.py
+```
+
+Fixture success validates tooling only. **All real captures remain NOT TESTED.**
+
+## Executable contract and L1 activation window
+
+`internal/manifest` is the sole executable specification. Regenerate the path-free
+`executable_manifest.json` with `go run ./internal/manifest/cmd/export` (UTF-8,
+no BOM); `aurasplit.exe manifest --json` exports identical bytes. Go parity tests
+reject a stale generated file. The recorder embeds this contract in `run.json`;
+the analyzer requires an identical contract and uses its regex for protected
+flows and unrelated control eligibility. No basename or directory-prefix fallback.
+Only the four supported install roots, known helper paths and installers in those
+roots/SquirrelTemp qualify. Downloads and arbitrary Discord* roots do not.
+
+For L1 keep existing Discord flows running, start the recorder with no TUN,
+then activate protection after the physical-capture message. Independently verify
+the new TUN component and publish its ID in the private mapping file.
+All-component recording is already active, preserving the initial enable interval.
+Keep capture running through retirement/restart and both controls. Missing TUN
+mapping, empty TUN packets or missing required TUN control evidence is INCONCLUSIVE;
+never replace the initial interval with a later healthy-only capture.
+
+
+## Aktivasyon sınırı ve temel kayıt
+
+Kayıt, korumadan önce başlar. Politika uygulandı ve tünel açık bilgisini güncel
+servis durumundan doğrulayın; açık TUN bileşenini eşleyin. Ardından yakalayıcı
+penceresinde **A** tuşuna basın. `capture.ps1` örneklemeyi durdurmadan UTC zamanı,
+`capture_operator_confirmation`, `policy_applied: true`, `tunnel_up: true`
+alanlarını `run.json.activation` içine yazar. Bu, operatörün politika doğrulamasına
+dayanır; otomatik heartbeat/politika readback kanıtı değildir. İşareti aktivasyonun
+hemen ardından, senaryo uyaranları ve iki pozitif kontrolden önce verin.
+Yönlendirilmiş stdin ile işaret girilemez; kayıt INCONCLUSIVE kalır.
+
+Analiz işaretin kaynağını, iki onayı ve kayıt zaman aralığını denetler. Eksik veya
+geçersiz işaret `verified_activation_boundary_missing` ile INCONCLUSIVE olur.
+İşaret öncesi akışlar özel raporda `phase: baseline` ve `baseline` kayıt kimlikleri
+olarak korunur; sızıntı listesine katılmaz. İşaret anı dahil sonraki fiziksel çıkışlar
+sızıntı değerlendirmesine girer. Pozitif kontroller de bu aralıkta olmalıdır.
+Kalite/attribution kapıları tüm kayıt için sürer; temel kayıt hataları silinmez.
+Sonuç yalnızca işaret-son aralığını kapsar; önceki trafiğin güvenli olduğu iddiası yoktur.
+
+Varsayılan Discord basename/Downloads installer yönlendirme fallback'leri engine'de
+sürer; bunlar analyzer'ın doğrulanmış executable manifestini genişletmez.
+Manifest dışı şifreli akışlarda caller telemetry gereklidir. Canlı L1 ve klavye/
+pktmon/TUN işaret akışı **NOT TESTED**; sentetik sınır testleri ağ kabulü değildir.

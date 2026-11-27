@@ -89,9 +89,9 @@ func TestDiscoverInCoversEveryVersion(t *testing.T) {
 // Hitting a cap is reported (the pass becomes add-only), never silent.
 func TestDiscoverInCapIsReported(t *testing.T) {
 	base := t.TempDir()
-	dir := filepath.Join(base, "u", "AppData", "Local", "Discord", "app-1.0.1")
+	dir := filepath.Join(base, "u", "AppData", "Local", "SquirrelTemp")
 	for i := 0; i <= MaxExesPerDir; i++ {
-		touch(t, filepath.Join(dir, fmt.Sprintf("Discord%02d.exe", i)))
+		touch(t, filepath.Join(dir, fmt.Sprintf("DiscordSetup%02d.exe", i)))
 	}
 	got, err := DiscoverIn([]string{filepath.Join(base, "u")})
 	if !errors.Is(err, ErrCapReached) {

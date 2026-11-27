@@ -116,10 +116,9 @@ func runSetup() int {
   AURA Split TR %s - Yapılandırma
 ==============================================================
 
-Bu araç YALNIZCA Discord trafiğini (uygulama, güncelleyici
-Update.exe ve Discord alan adları) bir VPN (WireGuard) tünelinden
-geçirir. Oyunlar, diğer siteler ve geri kalan her şey normal
-bağlantınızı kullanır.
+Bu araç keşfedilen Discord programları için kalıcı engeller ve
+WireGuard tünel izni kurar. Tarayıcı Discord ve DNS en iyi çabadır;
+bu sınıflar için kalıcı fail-closed güvencesi yoktur.
 
 Yapılandırmadan sonra arka planda, pencere açmadan bir Windows
 hizmeti olarak çalışır ve bilgisayar açılınca kendiliğinden başlar.
@@ -142,8 +141,7 @@ yalnızca yöneticilerin okuyabildiği bir dosyada saklanır.
 	}
 
 	fmt.Println()
-	fmt.Println("Not: Discord alan adları (discord.com vb.) her programdan, tarayıcılar dahil,")
-	fmt.Println("tünelden geçer; böylece Discord adları hiçbir zaman ISS'nize sorulmaz.")
+	fmt.Println("Not: Tarayıcı Discord ve DNS yalnızca en iyi çabayla yönlendirilir; kalıcı fail-closed değildir.")
 
 	// TunnelBrowserDiscord is kept in the profile for compatibility; the
 	// engine now always tunnels the Discord domains from every process.
@@ -249,6 +247,9 @@ yalnızca yöneticilerin okuyabildiği bir dosyada saklanır.
 	if !startAndReport(setupStartTimeout) {
 		return 1
 	}
+	if finishProtectionStart(setupStartTimeout) != 0 {
+		return 1
+	}
 
 	fmt.Printf(`
 ==============================================================
@@ -257,8 +258,9 @@ yalnızca yöneticilerin okuyabildiği bir dosyada saklanır.
 
 - AURA Split TR artık arka planda, pencere olmadan çalışıyor.
 - Bilgisayar her açıldığında otomatik başlar.
-- Discord YALNIZCA tünelden bağlanabilir: hizmet durursa veya tünel
-  çalışmazsa Discord ENGELLENİR (doğrudan bağlantıya düşmez).
+- Manifest yolları için dört ALE katmanı, tünel izni ve eski akış
+  kapısı tamamlandı. Paket izolasyonu canlı ölçülmedi.
+  Tarayıcı Discord ve DNS: en iyi çaba; kalıcı fail-closed yok.
   Doğrudan bağlantıya dönmek için:  "%[1]s" disable
   Acil durumda kuralları kaldırmak:  "%[1]s" recover
 - ÖNEMLİ: Discord'u tamamen kapatıp yeniden açın.
@@ -320,7 +322,7 @@ projeye bildirin.`, int(timeout/time.Second), paths.InstalledExePath())
 func printBlockedHint() {
 	if installed, _, err := policyInstalled(); err == nil && installed {
 		fmt.Println()
-		fmt.Println("Discord şu anda ENGELLİ (fail-closed): hizmet çalışmadığı için tünel yok.")
+		fmt.Println("Kalıcı WFP politikası mevcut; tam manifest kapsamı ve eski akışlar ayrıca doğrulanmalıdır.")
 		fmt.Println("Doğrudan bağlantıya hemen dönmek için:", `"`+paths.InstalledExePath()+`" recover`)
 	}
 }

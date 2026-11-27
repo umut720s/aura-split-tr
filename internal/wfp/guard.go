@@ -1,6 +1,7 @@
 package wfp
 
 import (
+	"aurasplit/internal/manifest"
 	"context"
 	"errors"
 	"fmt"
@@ -25,11 +26,18 @@ const (
 	// open at once. More than one exists only while a replacement is
 	// partial: an old session is closed only when the others permit every
 	// still-relevant path it permitted.
+	// Failed closures remain tracked even above this bound; no further
+	// session is opened until their closure has been confirmed.
 	MaxPermitSessions = 2
 )
 
 // Status is a snapshot of what Guard has established.
 type Status struct {
+	PendingEnrollment bool
+	Ready             bool
+	OldFlowsComplete  bool
+	OldFlowsReason    string
+	Classes           []ClassStatus
 	// Applied: the persistent policy was written successfully at least
 	// once by this Guard (provider, sublayer and blocks are in place).
 	Applied bool
@@ -50,12 +58,14 @@ type Status struct {
 	// number of executables the open sessions cover together;
 	// PermitSessions how many sessions are open (more than one while a
 	// partial replacement keeps the old session). PermitComplete is true
-	// only if one session covers every blocked executable and no retry is
+	// only if one session covers every canonical blocked executable and no retry is
 	// pending.
 	Permit         bool
 	PermitApps     int
 	PermitSessions int
 	PermitComplete bool
+	// PendingPermitClosure means a session may still grant legacy permissions.
+	PendingPermitClosure bool
 	// Err is the last hard error, empty after a successful write.
 	Err string
 }
@@ -71,10 +81,15 @@ type Status struct {
 // the filters already in WFP (also those of a previous process) are the
 // baseline that is never shrunk by an incomplete inventory.
 type Guard struct {
-	policy   Policy
-	discover func() ([]string, error)
-	logf     func(level, msg string)
-	onChange func(Status)
+	// CheckOldFlows is injected by the Windows owner; nil never grants readiness.
+	// An empty path set retires verified enrollment generations without sampling.
+	CheckOldFlows    func([]string) (bool, string)
+	oldFlowsComplete bool
+	oldFlowsReason   string
+	policy           Policy
+	discover         func() ([]string, error)
+	logf             func(level, msg string)
+	onChange         func(Status)
 
 	mu         sync.Mutex
 	applied    bool
@@ -86,13 +101,14 @@ type Guard struct {
 	covered    []string // executables with a persistent block
 	tunnel     bool
 	luid       uint64
-	// permits are the open dynamic permit sessions, oldest first (at most
-	// MaxPermitSessions).
+	// permits are the open dynamic permit sessions, oldest first. Failed
+	// closures remain owned until success, even above MaxPermitSessions.
 	permits []Permit
 	// permitDirty: the permit failed, is partial or is split over several
 	// sessions and must be retried even if the inventory does not change.
-	permitDirty bool
-	lastErr     string
+	permitDirty        bool
+	permitClosePending bool
+	lastErr            string
 }
 
 // NewGuard returns a Guard. discover returns the current Discord
@@ -130,18 +146,40 @@ func (g *Guard) permitPathsLocked() []string {
 }
 
 func (g *Guard) permitCompleteLocked() bool {
-	return len(g.permits) == 1 && !g.permitDirty && containsAll(g.permits[0].Paths(), g.covered)
+	return g.tunnel && g.luid != 0 && len(g.permits) == 1 && !g.permitDirty && !g.permitClosePending && containsAll(g.permits[0].Paths(), canonicalPaths(g.covered)) && containsAll(g.permits[0].Paths(), canonicalPaths(g.inventory))
+}
+
+// canonicalPaths bounds permits by the engine's manifest classification.
+// Retained legacy blocks are deliberately not removed here.
+func canonicalPaths(paths []string) []string {
+	var out []string
+	for _, p := range paths {
+		if manifest.Accepts(p) {
+			out = append(out, p)
+		}
+	}
+	return normalizePaths(out)
+}
+
+func (g *Guard) retireOldFlowsLocked() {
+	g.oldFlowsComplete = false
+	if g.CheckOldFlows != nil {
+		_, g.oldFlowsReason = g.CheckOldFlows(nil)
+	}
 }
 
 // closePermitsLocked closes every open permit session.
 func (g *Guard) closePermitsLocked() error {
 	var errs []error
+	var retained []Permit
 	for _, p := range g.permits {
 		if err := p.Close(); err != nil {
 			errs = append(errs, err)
+			retained = append(retained, p)
 		}
 	}
-	g.permits = nil
+	g.permits = retained
+	g.permitClosePending = len(retained) > 0
 	return errors.Join(errs...)
 }
 
@@ -152,6 +190,7 @@ func (g *Guard) statusLocked() Status {
 		Incomplete: g.incomplete, Unresolved: g.unresolved, OverBudget: g.overBudget,
 		Permit: len(g.permits) > 0, PermitSessions: len(g.permits),
 		PermitComplete: g.permitCompleteLocked(), Err: g.lastErr,
+		PendingPermitClosure: g.permitClosePending,
 	}
 	if len(g.permits) > 0 {
 		st.PermitApps = len(g.permitPathsLocked())
@@ -159,6 +198,23 @@ func (g *Guard) statusLocked() Status {
 	if !g.applied && st.Incomplete == "" {
 		st.Incomplete = "policy not applied yet"
 	}
+	st.OldFlowsComplete, st.OldFlowsReason = g.oldFlowsComplete, g.oldFlowsReason
+	st.PendingEnrollment = !st.Complete
+	st.Ready = st.Complete && st.PermitComplete && st.OldFlowsComplete && st.Err == "" && len(canonicalPaths(g.inventory)) > 0
+	reason := "Koruma hazÄ±r deÄŸil: kalÄ±cÄ± kapsam, tÃ¼nel izni veya eski akÄ±ÅŸ kapÄ±sÄ± bekleniyor."
+	if st.PendingPermitClosure {
+		reason += " Legacy permit session closure pending; retrying."
+	}
+	if st.Incomplete != "" {
+		reason += " " + st.Incomplete
+	}
+	if st.Err != "" {
+		reason += " " + st.Err
+	}
+	if !st.OldFlowsComplete && st.OldFlowsReason != "" {
+		reason += " " + st.OldFlowsReason
+	}
+	st.Classes = TrafficClasses(g.inventory, st.Ready, reason)
 	return st
 }
 
@@ -175,21 +231,30 @@ func (g *Guard) Status() Status {
 	return g.statusLocked()
 }
 
+// ReportFailure exposes owner failures without removing any existing blocks.
+func (g *Guard) ReportFailure(reason string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.lastErr = reason
+	g.retireOldFlowsLocked()
+	g.notifyLocked()
+}
+
 // healthy: nothing needs a quick retry.
 func (g *Guard) healthy() bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return g.applied && g.complete && !g.permitNeedsSyncLocked() && g.lastErr == ""
+	return g.applied && g.complete && g.oldFlowsComplete && !g.permitNeedsSyncLocked() && !g.permitClosePending && g.lastErr == ""
 }
 
 // permitNeedsSyncLocked: the tunnel runs and the permit is missing,
 // failed, partial, split over several sessions or does not cover every
-// blocked executable.
+// canonical blocked executable.
 func (g *Guard) permitNeedsSyncLocked() bool {
 	if !g.tunnel || !g.applied {
 		return false
 	}
-	return len(g.permits) != 1 || g.permitDirty || !containsAll(g.permits[0].Paths(), g.covered)
+	return len(g.permits) != 1 || g.permitDirty || !equalPaths(g.permits[0].Paths(), canonicalPaths(g.covered))
 }
 
 // intersectPaths returns the paths of a that are also in b
@@ -218,10 +283,31 @@ func intersectPaths(a, b []string) []string {
 // again (its new executables stay blocked, fail-closed). Anything but a
 // single complete session marks the permit dirty, so it is retried.
 func (g *Guard) syncPermitLocked(set []string) {
+	// Failed retirements remain owned, including after tunnel shutdown.
+	// Confirm closure before opening any further sessions.
+	if g.permitClosePending {
+		if err := g.closePermitsLocked(); err != nil {
+			g.lastErr = "permit closure pending: " + err.Error()
+			g.permitDirty = true
+			return
+		}
+	}
 	if !g.tunnel {
 		return
 	}
-	set = normalizePaths(set)
+	set = canonicalPaths(set)
+	// Close excess permissions before opening a replacement, even if the
+	// replacement fails. Persistent blocks remain in force.
+	for _, p := range g.permits {
+		if !containsAll(set, p.Paths()) {
+			g.permitDirty = true
+			if err := g.closePermitsLocked(); err != nil {
+				g.lastErr = "permit closure pending: " + err.Error()
+				return
+			}
+			break
+		}
+	}
 	if len(g.permits) == 1 && !g.permitDirty && containsAll(g.permits[0].Paths(), set) {
 		return
 	}
@@ -233,6 +319,7 @@ func (g *Guard) syncPermitLocked(set []string) {
 		if err == nil {
 			err = errors.New("no permit returned")
 		}
+		g.lastErr = err.Error()
 		g.log("ERROR", "wfp: cannot open the tunnel permit (retrying): "+err.Error())
 		return
 	}
@@ -248,7 +335,12 @@ func (g *Guard) syncPermitLocked(set []string) {
 			}
 		}
 		if containsAll(others, intersectPaths(keep[i].Paths(), set)) {
-			_ = keep[i].Close()
+			if closeErr := keep[i].Close(); closeErr != nil {
+				g.permitClosePending = true
+				g.lastErr = "permit closure pending: " + closeErr.Error()
+				i++
+				continue
+			}
 			keep = append(keep[:i:i], keep[i+1:]...)
 			continue
 		}
@@ -257,27 +349,37 @@ func (g *Guard) syncPermitLocked(set []string) {
 	dirty := err != nil
 	if len(keep) > MaxPermitSessions {
 		g.log("WARN", fmt.Sprintf("wfp: tunnel permit would need more than %d sessions; the old sessions are kept, the new executables stay blocked (retrying)", MaxPermitSessions))
-		_ = p.Close()
-		keep = keep[:len(keep)-1]
+		if closeErr := p.Close(); closeErr != nil {
+			g.permitClosePending = true
+			g.lastErr = "permit closure pending: " + closeErr.Error()
+		} else {
+			keep = keep[:len(keep)-1]
+		}
 		dirty = true
 	}
 	g.permits = keep
-	g.permitDirty = dirty || len(keep) > 1
+	g.permitDirty = dirty || len(keep) > 1 || g.permitClosePending
 }
 
 // Reconcile rediscovers the executables and applies them: authoritatively
-// after a complete discovery, add-only otherwise. It is skipped only when
-// the last pass was complete, the inventory is unchanged and the permit
-// needs nothing, so unresolved executables and a failed permit are
-// retried on every call.
+// after a complete discovery, add-only otherwise. Every pass reads committed
+// coverage, including unchanged inventories; failures remain pending for retry.
 func (g *Guard) Reconcile() error {
 	found, derr := g.discover()
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	want := normalizePaths(found)
-	if derr == nil && g.applied && g.complete && g.lastErr == "" && equalPaths(want, g.inventory) && !g.permitNeedsSyncLocked() {
-		return nil
+	// Detect loss before Apply can repair it within this same reconcile.
+	if g.applied {
+		if err := VerifyPolicy(g.policy, canonicalPaths(g.covered)); err != nil {
+			g.retireOldFlowsLocked()
+		}
 	}
+	if !equalPaths(want, g.inventory) {
+		g.oldFlowsComplete = false
+	}
+	g.inventory = want
+	g.complete = false
 	mode := Authoritative
 	if derr != nil {
 		mode = AddOnly
@@ -292,6 +394,7 @@ func (g *Guard) Reconcile() error {
 	res, err := g.policy.Apply(want, mode)
 	var inc *IncompleteError
 	if err != nil && !errors.As(err, &inc) {
+		g.retireOldFlowsLocked()
 		g.lastErr = err.Error()
 		g.notifyLocked()
 		return err
@@ -313,12 +416,22 @@ func (g *Guard) Reconcile() error {
 		reasons = append(reasons, fmt.Sprintf("%d executable(s) over the policy budget (%d total, %d per profile)",
 			len(inc.OverBudget), MaxPolicyApps, MaxPolicyAppsPerProfile))
 	}
+	if err := VerifyPolicy(g.policy, normalizePaths(append(append([]string(nil), want...), res.Covered...))); err != nil {
+		reasons = append(reasons, "KalÄ±cÄ± politikanÄ±n dÃ¶rt ALE katmanÄ± okunamadÄ±: "+err.Error())
+	}
+	if len(want) == 0 {
+		reasons = append(reasons, "Executable manifesti boÅŸ")
+	}
 	g.complete = len(reasons) == 0
+	if !g.complete {
+		g.retireOldFlowsLocked()
+	}
 	g.incomplete = strings.Join(reasons, "; ")
-	// Make the permit cover everything that is blocked now (also blocks of
-	// a previous process found in WFP). Unresolved and over-budget
-	// executables have no new block, so they are not part of the set.
+	// Only canonical covered paths receive permits; legacy blocks stay blocked.
 	g.syncPermitLocked(g.covered)
+	if g.complete && g.CheckOldFlows != nil {
+		g.oldFlowsComplete, g.oldFlowsReason = g.CheckOldFlows(canonicalPaths(intersectPaths(want, g.covered)))
+	}
 	g.notifyLocked()
 	if !g.complete {
 		return fmt.Errorf("%w: %s", ErrIncomplete, g.incomplete)
@@ -338,22 +451,33 @@ func (h *permitHandle) Close() error {
 }
 
 // TunnelUp records that the tunnel runs on interface luid and opens the
-// dynamic permit for the blocked set. If no persistent policy was applied
-// by this Guard yet, no permit is opened now; a later successful Reconcile
-// adds it. A permit that fails completely is returned as an error (the
+// dynamic permit for the blocked set. An incomplete or unapplied policy
+// rejects activation; the engine retries after Reconcile. A permit that
+// fails completely is returned as an error (the
 // engine then treats the tunnel start as failed and keeps Discord
 // blocked); a partial permit is kept and retried by Reconcile. Closing
 // the returned handle closes the permit.
 func (g *Guard) TunnelUp(luid uint64) (io.Closer, error) {
 	if luid == 0 {
+		g.ReportFailure("AURA TUN LUID sÄ±fÄ±r; koruma hazÄ±r deÄŸil")
 		return nil, errors.New("wfp: tunnel interface LUID is zero")
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	_ = g.closePermitsLocked()
+	if !g.applied || !g.complete {
+		g.lastErr = "KalÄ±cÄ± politika ve dÃ¶rt ALE katmanÄ± readback tamamlanmadÄ±; yeniden deneniyor"
+		g.notifyLocked()
+		return nil, errors.New(g.lastErr)
+	}
+	if err := g.closePermitsLocked(); err != nil {
+		g.lastErr = err.Error()
+		g.permitDirty = true
+		g.notifyLocked()
+		return nil, err
+	}
 	g.permitDirty = false
 	if g.applied {
-		p, err := g.policy.PermitOnTunnel(luid, g.covered)
+		p, err := g.policy.PermitOnTunnel(luid, canonicalPaths(g.covered))
 		if p == nil {
 			if err == nil {
 				err = errors.New("no permit returned")

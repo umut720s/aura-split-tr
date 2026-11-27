@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 
+	"aurasplit/internal/manifest"
 	"aurasplit/internal/service"
 )
 
@@ -76,6 +77,17 @@ func main() {
 	}
 	var code int
 	switch cmd {
+	case "manifest":
+		if len(args) != 2 || args[1] != "--json" {
+			fmt.Fprintln(os.Stderr, "Kullanım: aurasplit.exe manifest --json")
+			code = 2
+		} else {
+			_, err := os.Stdout.Write(manifest.JSON())
+			if err != nil {
+				code = 1
+			}
+		}
+
 	case "setup", "kurulum":
 		code = cmdSetup(elevated)
 	case "status", "durum":
@@ -212,6 +224,7 @@ Komutlar:
   run        Ön planda çalıştır (hata ayıklama; günlük konsola yazılır, Ctrl+C ile çık)
              --debug: her bağlantıyı günlüğe yaz (ziyaret edilen adresleri içerir)
   version    Sürümü göster
+  manifest --json  Korunan program sözleşmesini JSON olarak göster
   help       Bu yardımı göster
 
 Yönetici gerektiren komutlar gerekirse izin ister.

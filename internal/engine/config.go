@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"strconv"
 
+	"aurasplit/internal/manifest"
 	"aurasplit/internal/profile"
 )
 
@@ -30,24 +31,15 @@ const (
 	keepaliveSeconds = 25
 )
 
-// DiscordPathRegex matches every executable under the per-user Discord
-// install directories (Discord.exe and the Squirrel updater Update.exe).
-const DiscordPathRegex = `(?i)\\AppData\\Local\\Discord(PTB|Canary|Development)?\\`
+// DiscordPathRegex is generated from the enrollment contract.
+var DiscordPathRegex = manifest.PathRegex()
 
-// DiscordInstallerRegex matches the installers (DiscordSetup.exe,
-// DiscordPTBSetup.exe, DiscordCanarySetup.exe, "DiscordSetup (1).exe", …),
-// which usually run from the Downloads folder.
+// Fallback rules provide routing only, never verified manifest enrollment.
+const DiscordInstallDirectoryRegex = `(?i)\\AppData\\Local\\(?:Discord|DiscordPTB|DiscordCanary|DiscordDevelopment)\\`
+
 const DiscordInstallerRegex = `(?i)\\Discord\w*Setup[^\\]*\.exe$`
 
-// DiscordProcessNames catches the Discord clients wherever they are
-// installed (for example a portable or per-machine copy). Update.exe is
-// deliberately not listed by name: that name is used by many programs.
-var DiscordProcessNames = []string{
-	"Discord.exe",
-	"DiscordPTB.exe",
-	"DiscordCanary.exe",
-	"DiscordDevelopment.exe",
-}
+var DiscordProcessNames = []string{"Discord.exe", "DiscordPTB.exe", "DiscordCanary.exe", "DiscordDevelopment.exe"}
 
 // DiscordDomains is the Discord-owned domain set (domain_suffix semantics).
 // It is tunnelled from every process, so browsers and the installers use the
@@ -370,8 +362,9 @@ func buildConfig(p *profile.Profile, logOpts logOptions, mode Mode, env netEnv) 
 		peer.Reserved = []uint8{wg.Reserved[0], wg.Reserved[1], wg.Reserved[2]}
 	}
 
+	// Routing fallbacks are separate from the verified enrollment contract.
 	processNames := append(append([]string{}, DiscordProcessNames...), p.ExtraProcessNames...)
-	pathRegex := []string{DiscordPathRegex, DiscordInstallerRegex}
+	pathRegex := []string{manifest.PathRegex(), DiscordInstallDirectoryRegex, DiscordInstallerRegex}
 
 	// discord is the action applied to classified Discord traffic.
 	discord := routeRule{Action: "route", Outbound: TagWG}
@@ -396,9 +389,11 @@ func buildConfig(p *profile.Profile, logOpts logOptions, mode Mode, env netEnv) 
 		{Protocol: []string{"dns"}, Action: "hijack-dns"},
 		{IPIsPrivate: true, Action: "route", Outbound: TagDirect},
 		withRoute(routeRule{ProcessPathRegex: pathRegex}),
-		withRoute(routeRule{ProcessName: processNames}),
-		withRoute(routeRule{Domain: DiscordHosts, DomainSuffix: DiscordDomains}),
 	}
+	if len(processNames) > 0 {
+		routeRules = append(routeRules, withRoute(routeRule{ProcessName: processNames}))
+	}
+	routeRules = append(routeRules, withRoute(routeRule{Domain: DiscordHosts, DomainSuffix: DiscordDomains}))
 
 	// DNS: on Windows most lookups come from the DNS Client service, so the
 	// process rules only catch apps with their own resolver; the domain rule
@@ -433,13 +428,17 @@ func buildConfig(p *profile.Profile, logOpts logOptions, mode Mode, env netEnv) 
 		r1.ProcessPathRegex = pathRegex
 		r2.ProcessName = processNames
 		r3.Domain, r3.DomainSuffix = DiscordHosts, DiscordDomains
-		dnsRules = append(dnsRules, r1, r2, r3)
+		dnsRules = append(dnsRules, r1)
+		if len(processNames) > 0 {
+			dnsRules = append(dnsRules, r2)
+		}
+		dnsRules = append(dnsRules, r3)
 	}
-	dnsRules = append(dnsRules,
-		withDNS(dnsRule{ProcessPathRegex: pathRegex}),
-		withDNS(dnsRule{ProcessName: processNames}),
-		withDNS(dnsRule{Domain: DiscordHosts, DomainSuffix: DiscordDomains}),
-	)
+	dnsRules = append(dnsRules, withDNS(dnsRule{ProcessPathRegex: pathRegex}))
+	if len(processNames) > 0 {
+		dnsRules = append(dnsRules, withDNS(dnsRule{ProcessName: processNames}))
+	}
+	dnsRules = append(dnsRules, withDNS(dnsRule{Domain: DiscordHosts, DomainSuffix: DiscordDomains}))
 
 	servers := []dnsServer{{Type: "local", Tag: TagDNSLocal}}
 	var endpoints []wgEndpoint

@@ -52,15 +52,21 @@ type tunnelState struct {
 
 // protectionState mirrors wfp.Status.
 type protectionState struct {
-	Applied        bool   `json:"applied"`
-	Apps           int    `json:"apps"`
-	Complete       bool   `json:"complete"`
-	Incomplete     string `json:"incomplete,omitempty"`
-	Unresolved     int    `json:"unresolved,omitempty"`
-	Permit         bool   `json:"permit"`
-	PermitApps     int    `json:"permit_apps,omitempty"`
-	PermitComplete bool   `json:"permit_complete"`
-	Error          string `json:"error,omitempty"`
+	PendingEnrollment    bool              `json:"pending_enrollment"`
+	Ready                bool              `json:"ready"`
+	OldFlowsComplete     bool              `json:"old_flows_complete"`
+	OldFlowsReason       string            `json:"old_flows_reason"`
+	Classes              []wfp.ClassStatus `json:"classes"`
+	Applied              bool              `json:"applied"`
+	Apps                 int               `json:"apps"`
+	Complete             bool              `json:"complete"`
+	Incomplete           string            `json:"incomplete,omitempty"`
+	Unresolved           int               `json:"unresolved,omitempty"`
+	Permit               bool              `json:"permit"`
+	PermitApps           int               `json:"permit_apps,omitempty"`
+	PermitComplete       bool              `json:"permit_complete"`
+	PendingPermitClosure bool              `json:"pending_permit_closure"`
+	Error                string            `json:"error,omitempty"`
 }
 
 const (
@@ -187,9 +193,16 @@ func (w *stateWriter) setProtection(st wfp.Status) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.cur.Protection = &protectionState{
+		PendingEnrollment: st.PendingEnrollment,
+		Ready:             st.Ready, OldFlowsComplete: st.OldFlowsComplete, OldFlowsReason: scrubDetail(st.OldFlowsReason), Classes: st.Classes,
 		Applied: st.Applied, Apps: st.Apps, Complete: st.Complete, Incomplete: scrubDetail(st.Incomplete),
 		Unresolved: st.Unresolved, Permit: st.Permit, PermitApps: st.PermitApps, PermitComplete: st.PermitComplete,
-		Error: scrubDetail(st.Err),
+		PendingPermitClosure: st.PendingPermitClosure,
+		Error:                scrubDetail(st.Err),
+	}
+	w.cur.Protection.Classes = append([]wfp.ClassStatus(nil), st.Classes...)
+	for i := range w.cur.Protection.Classes {
+		w.cur.Protection.Classes[i].Reason = scrubDetail(w.cur.Protection.Classes[i].Reason)
 	}
 	if w.cur.State != "" {
 		w.changedLocked()

@@ -165,8 +165,8 @@ type FilterRecord struct {
 // are never removed to make room. The dynamic tunnel permit uses the same
 // budget.
 const (
-	MaxPolicyApps           = 256
-	MaxPolicyAppsPerProfile = 32
+	MaxPolicyApps           = 1024
+	MaxPolicyAppsPerProfile = 128
 )
 
 // profileOf returns the budget bucket of an executable path: the user
@@ -689,9 +689,11 @@ func (c *sessionPermit) Close() error {
 	if c.s == nil {
 		return nil
 	}
-	err := c.s.Close()
+	if err := c.s.Close(); err != nil {
+		return err
+	}
 	c.s = nil
-	return err
+	return nil
 }
 
 // PermitOnTunnel implements Policy.

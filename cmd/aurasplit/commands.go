@@ -17,6 +17,7 @@ import (
 	"aurasplit/internal/paths"
 	"aurasplit/internal/profile"
 	"aurasplit/internal/service"
+	"aurasplit/internal/wfp"
 )
 
 func cmdStatus() int {
@@ -164,6 +165,7 @@ func describeStatus(in statusInput, loc *time.Location) []string {
 	// The permit is only claimed for what it covers: a partial or failed
 	// permit is shown as such.
 	permitFull := permit && prot.PermitComplete
+	ready := tunnel && ts != nil && protectionReady(*ts) && (!in.policyKnown || in.policyInstalled)
 	switch {
 	case !in.policyKnown:
 		add("PROTECTION_ACTIVE:         bilinmiyor (WFP okunamadı; yönetici olarak çalıştırın)")
@@ -179,7 +181,7 @@ func describeStatus(in statusInput, loc *time.Location) []string {
 		case permit:
 			permitText = fmt.Sprintf("açık, EKSİK (%d/%d program; yeniden deneniyor)", prot.PermitApps, prot.Apps)
 		}
-		add("PROTECTION_ACTIVE:         EVET — kalıcı WFP politikası yüklü (%d Discord programı%s); tünel izni: %s",
+		add("PERSISTENT_POLICY:         mevcut (%d program%s); tünel izni: %s",
 			in.policyApps, src, permitText)
 	default:
 		add("PROTECTION_ACTIVE:         HAYIR — kalıcı WFP politikası yok")
@@ -199,21 +201,28 @@ func describeStatus(in statusInput, loc *time.Location) []string {
 		add("  WFP hatası:              %s", prot.Error)
 	}
 
-	switch {
-	case in.policyKnown && in.policyInstalled && tunnel && permitFull:
-		add("Discord şu anda:           TÜNELDEN (tünel dışında engelli)")
-	case in.policyKnown && in.policyInstalled && tunnel && permit:
-		add("Discord şu anda:           TÜNELDEN, ancak bazı Discord programlarının tünel izni eksik (onlar engelli)")
-	case in.policyKnown && in.policyInstalled:
-		add("Discord şu anda:           ENGELLİ (fail-closed; doğrudan bağlantı için: aurasplit.exe disable)")
-	case tunnel:
-		add("Discord şu anda:           tünele yönlendiriliyor, ancak kalıcı koruma YOK (hizmet durursa doğrudan bağlanır)")
-	case in.policyKnown && in.scmRunning && ts != nil && engine.State(ts.State) == engine.StateBlocking:
-		add("Discord şu anda:           engelleniyor (yalnızca hizmet çalışırken)")
-	case in.policyKnown:
-		add("Discord şu anda:           DOĞRUDAN bağlantı (korunmuyor)")
-	default:
-		add("Discord şu anda:           bilinmiyor")
+	add("PROTECTION_READY:          %s (manifest kapsamı; paket izolasyonu ölçülmedi)", yesNo(ready))
+	if prot != nil && prot.PendingPermitClosure {
+		add("PERMIT_CLOSURE_PENDING:    EVET — eski izin oturumu kapanmadı; yeniden deneniyor")
+	}
+	classes := wfp.TrafficClasses(nil, false, "Güncel kapsam doğrulanamadı.")
+	for i := range classes {
+		if i < 4 {
+			classes[i].Reason = "Güncel executable manifesti ve kapsamı doğrulanamadı."
+		}
+	}
+	if prot != nil {
+		add("OLD_FLOW_GATE:             %s — %s", yesNo(prot.OldFlowsComplete), prot.OldFlowsReason)
+		if len(prot.Classes) > 0 {
+			classes = append([]wfp.ClassStatus(nil), prot.Classes...)
+		}
+	}
+	for _, c := range classes {
+		if !ready && c.Coverage == "protected" {
+			c.Coverage = "partial"
+			c.Reason = "Güncel hazır olma kapısı tamamlanmadı."
+		}
+		add("  %s: %s — %s", c.Class, c.Coverage, c.Reason)
 	}
 	if ts != nil && ts.LogDegraded {
 		add("Günlük:                    UYARI — günlük dosyası döndürülemiyor; yeni satırlar şimdilik yazılmıyor")
@@ -230,9 +239,7 @@ func cmdStart() int {
 	if !startAndReport(setupStartTimeout) {
 		return 1
 	}
-	fmt.Println("Hizmet başlatıldı; Discord engelleme kuralları yeniden uygulanır.")
-	fmt.Println("Discord'u tamamen kapatıp yeniden açın.")
-	return 0
+	return finishProtectionStart(setupStartTimeout)
 }
 
 // resumeDecision decides whether `start --msi` (run by the MSI after an

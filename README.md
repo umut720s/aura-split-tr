@@ -4,13 +4,13 @@
 
 ## AURA Split TR nedir?
 
-AURA Split TR, Windows'ta yalnızca **Discord trafiğini WireGuard VPN tünelinden** geçiren, arka planda Windows hizmeti olarak çalışan açık kaynaklı bir araçtır (GPL-3.0-or-later). Discord uygulaması, güncelleyicisi, kurucusu ve listelenen Discord alan adları — hizmet çalışırken tarayıcıdaki Discord dahil — VPN'i kullanır; oyunlar, diğer siteler ve diğer uygulamalar normal bağlantınızdan çıkar. Ücretsiz **Cloudflare WARP**, **Proton VPN Free/Plus** veya standart bir **WireGuard yapılandırması** seçebilirsiniz. Yapılandırmadan sonra hizmet Windows ile başlar; açık pencere veya tepsi simgesi gerekmez.
+AURA Split TR, Windows'ta Discord akışlarını **WireGuard VPN tüneline** yönlendiren, arka planda Windows hizmeti olarak çalışan açık kaynaklı bir araçtır (GPL-3.0-or-later). Kalıcı engeller yalnızca başarıyla kaydedilen executable yollarını kapsar; tarayıcı Discord ve DNS **en iyi çaba (best-effort), kalıcı fail-closed değildir**. Yeni yolların enrollment yarışı ve engine sınıflandırmasının sınırları vardır. Oyunlar, diğer siteler ve diğer uygulamalar normal bağlantı için yapılandırılır. Ücretsiz **Cloudflare WARP**, **Proton VPN Free/Plus** veya standart bir **WireGuard yapılandırması** seçebilirsiniz.
 
 **Windows 10/11 x64 · Authenticode imzasız beta.** Canlı testler yalnızca bir Windows 11 bilgisayarda yapıldı; sonuçlar tüm ağlar için garanti değildir. [English summary](#english-summary) aşağıdadır.
 
 ## Öne çıkanlar
 
-- **Discord uygulaması için fail-closed koruma:** hizmet durduğunda, çöktüğünde veya ağ kesildiğinde bulunan Discord uygulaması ve güncelleyicisi tünel dışında engelli kalır. Tek bilgisayarda durma/çökme/ağ kesintisi soket örneklemesiyle; hizmetin durması ayrıca paket yakalamayla gözlendi. Tarayıcı ve DNS sınırları [Test durumu](#test-durumu) bölümündedir.
+- **Manifest tabanlı koruma:** kaydedilen desktop, updater, helper ve installer yollarının yeni off-TUN bağlantılarını kalıcı WFP engelleriyle sınırlamayı amaçlar. Tam paket/UDP/boot izolasyonu kanıtlanmış değildir; eski akış kapısı ve enrollment sınırları aşağıdadır.
 - **Sistem DNS ayarlarını değiştirmez.** Hizmet çalışırken listelenen Discord adlarını tünel üzerinden çözer.
 - **Standart MSI kurulumu/kaldırma:** normal kaldırmada hizmet, WFP kuralları, dosyalar ve özel anahtarlı veri klasörü temizlenir.
 - **Dosya seçicili yapılandırıcı:** Proton veya başka sağlayıcının `.conf` dosyasını seçin; WARP için dosya indirmek gerekmez.
@@ -78,7 +78,7 @@ Arayüz adımları: [Proton'un resmî WireGuard rehberi](https://protonvpn.com/s
 ### Yapılandırmayı tamamlayın
 
 1. Sihirbaz profili kaydeder, koruma kurallarını uygular ve hizmeti otomatik başlatmaya alıp çalıştırır. `status` ile bağlantıyı kontrol edin.
-2. Discord'u **sistem tepsisinden tamamen kapatın** (sağ tık → Discord'dan Çık), ardından yeniden açın. Yalnızca pencereyi kapatmak yeterli değildir.
+2. Discord'u **sistem tepsisinden tamamen kapatın** (sağ tık → Discord'dan Çık). Yalnızca pencereyi kapatmak yeterli değildir. `setup`/`start`, `[y/N]` sorusuyla süreçleri kapatmayı teklif eder; boş yanıt **Hayır** demektir. TCP bağlantı sıfırlaması yapılmaz. Kapı, her manifest yolunun politika doğrulamasında kaydedilen eşiğinden önce başlamış süreçler kapanana kadar bekler. Kimliği/başlangıcı okunamayan olası Discord süreçleri ve çocukları da bekleme nedenidir. Onaylı kapatma yalnızca tam manifest yolu eşleşen süreçlere, aynı handle üzerinden yol yeniden okunarak uygulanır. `OLD_FLOW_GATE: EVET` sonrasında Discord'u yeniden açın. Zaman aşımı başarısız çıkış kodudur; hizmet yeniden dener, `status` ile kontrol edin.
 3. **`.conf` özel anahtarınızı içerir.** Kurulumdan sonra indirdiğiniz dosyayı ve Geri Dönüşüm Kutusu'ndaki kopyasını silin; asla paylaşmayın, issue'ya veya ekran görüntüsüne koymayın. Uygulamanın kullandığı kopya `%ProgramData%\AuraSplitTR\profile.json` içinde, yalnızca Administrators/SYSTEM erişimiyle kalır.
 
 ## Kullanım
@@ -105,7 +105,24 @@ Tam yol ile örnekler:
 & "C:\Program Files\AuraSplitTR\aurasplit.exe" setup
 ```
 
-`SERVICE_RUNNING` hizmetin çalıştığını, `TUNNEL_INITIALIZED` yapılandırmanın uygulandığını gösterir. Başarılı bağlantı denemesi **`VPN_CONNECTIVITY_VERIFIED`** olarak görünür. `PROTECTION_ACTIVE` ve **Kapsam: TAM / EKSİK** satırlarını da kontrol edin; hizmetin çalışması tek başına tam koruma anlamına gelmez.
+`SERVICE_RUNNING`, `TUNNEL_INITIALIZED` ve **`VPN_CONNECTIVITY_VERIFIED`** ayrı sonuçlardır. `PERSISTENT_POLICY` yalnızca politika varlığını gösterir. `PROTECTION_READY: EVET` için manifestin tamamına başarılı Apply + dört ALE katmanı readback, sıfır bekleyen enrollment, manifesti kapsayan dinamik tünel izni ve `OLD_FLOW_GATE: EVET` gerekir. Bunlar paket izolasyonu ölçümü değildir. Durum, desktop (`Discord.exe`), updater (`Update.exe`), helpers, installers, browser Discord ve DNS sınıflarını ayrı `protected` / `partial` / `not-covered` ve nedenleriyle gösterir. Browser ve DNS daima best-effort/not-covered olarak kalır. Servis durduğunda veya güncel durum okunamadığında hazır olduğu varsayılmaz.
+
+Tek kaynak `internal/manifest`: `%LOCALAPPDATA%` altındaki Discord, DiscordPTB, DiscordCanary ve DiscordDevelopment kökleri; kök Update.exe; `app-*` içinde dört istemci adı, updater_launcher.exe, DiscordSystemHelper.exe, audio_effects_helper.exe, gpu_encoder_helper.exe ve bilinen `modules/discord_utils-*/discord_utils/DiscordSystemHelper.exe`, `modules/discord_voice-*/discord_voice/{audio_effects_helper,gpu_encoder_helper}.exe` yolları. Kurucular köklerde ve SquirrelTemp içinde `Discord*Setup*.exe` ile sınırlıdır. `aurasplit.exe manifest --json` kişisel yol içermeyen sözleşmeyi verir; engine ve leaktest aynı sözleşmeyi kullanır. Reparse noktaları izlenmez; kapasite/okuma hataları eksik kapsamdır. **Enrollment öncesi başlayan süreç hâlâ bir yarıştır (SEC-004 kısmen açık)**; Downloads, başka Temp çocukları ve özel konumlar bu manifestin dışındadır.
+
+Varsayılan dört Discord istemci adı ve Discord kurucu regex'i (Downloads dahil)
+manifest dışında da tünel kipinde `wg`, blok kipinde `reject` ile yönlendirilir.
+Durum bunları `routing fallbacks: routed-not-fail-closed` olarak ayırır; kalıcı
+koruma veya doğrulanmış enrollment sayılmaz. Eski kanonik olmayan bloklar kalabilir;
+bu yollar kanonik manifest tünel permitlerini devralmaz.
+
+Eski akış eşiği kesintisiz doğrulanmış enrollment nesline aittir; prune/kapsam kaybı
+ve recover sonrasında yenilenir. Süreç ilgisi PID ve oluşturulma zamanı ile izlenir.
+Görüntüsü okunamayan, koruma öncesi ve ebeveyn zinciri bilinmeyen yabancı süreçler
+de kapıyı bekletebilir; `status` engelleyen PID/adı gösterir. Bekleme kimlik çözülene
+veya süreç kapanana kadardır. Discord'u tamamen kapatıp yeniden başlatın; ilgisiz
+erişilemeyen süreç varsa o kimliğin çözülmesi/kapanması gerekir. Snapshot arası
+gizli çıkış/PID kullanımı, hiç okunamayan oluşturulma zamanı ve özel okunabilir
+EXE'ler için tam kapsama iddiası yoktur.
 
 ## Sık karşılaşılan sorunlar
 

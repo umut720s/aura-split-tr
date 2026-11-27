@@ -1,18 +1,16 @@
 package wfp
 
 import (
+	"aurasplit/internal/manifest"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 )
-
-// InstallDirNames are the per-user Discord install directories under
-// %LOCALAPPDATA%.
-var InstallDirNames = []string{"Discord", "DiscordPTB", "DiscordCanary", "DiscordDevelopment"}
 
 // Discovery caps: a hostile or broken profile cannot make the policy grow
 // without bound. Every app-* version directory that exists is covered
@@ -27,7 +25,7 @@ var InstallDirNames = []string{"Discord", "DiscordPTB", "DiscordCanary", "Discor
 const (
 	MaxProfiles        = 64
 	MaxExesPerDir      = 16
-	MaxPaths           = 256
+	MaxPaths           = MaxPolicyApps
 	MaxPathsPerProfile = MaxPolicyAppsPerProfile
 )
 
@@ -53,7 +51,7 @@ func lstatPlain(p string) (fs.FileInfo, error) {
 
 // DiscoverIn finds Discord executables in the given user profile
 // directories: <profile>\AppData\Local\<install>\Update.exe and
-// <profile>\AppData\Local\<install>\app-*\Discord*.exe. No component of
+// <profile>\AppData\Local\<install>\app-*\*.exe and bounded module helpers. No component of
 // a returned path is a reparse point. Missing directories are not errors;
 // other errors are joined and returned together with the partial result.
 func DiscoverIn(profileDirs []string) ([]string, error) {
@@ -105,7 +103,17 @@ profiles:
 				continue profiles
 			}
 		}
-		for _, name := range InstallDirNames {
+		if temp := filepath.Join(local, "SquirrelTemp"); plainDir(temp, note) {
+			for _, exe := range installerExes(temp, note) {
+				if !add(exe) {
+					break profiles
+				}
+				if profileFull {
+					continue profiles
+				}
+			}
+		}
+		for _, name := range installNames(local, note) {
 			inst := filepath.Join(local, name)
 			fi, err := lstatPlain(inst)
 			if err != nil || !fi.IsDir() {
@@ -114,6 +122,14 @@ profiles:
 			}
 			if upd := filepath.Join(inst, "Update.exe"); isPlainFile(upd, note) {
 				if !add(upd) {
+					break profiles
+				}
+				if profileFull {
+					continue profiles
+				}
+			}
+			for _, exe := range installerExes(inst, note) {
+				if !add(exe) {
 					break profiles
 				}
 				if profileFull {
@@ -146,11 +162,7 @@ func isPlainFile(p string, note func(error)) bool {
 
 // appDirs returns every app-* directory, newest version first.
 func appDirs(inst string, note func(error)) []string {
-	ents, err := os.ReadDir(inst)
-	if err != nil {
-		note(err)
-		return nil
-	}
+	ents := readEntries(inst, 4096, note)
 	var names []string
 	for _, e := range ents {
 		n := e.Name()
@@ -172,21 +184,79 @@ func appDirs(inst string, note func(error)) []string {
 	return out
 }
 
-// discordExes returns Discord*.exe files directly inside dir.
+// discordExes covers direct executables and exactly modules/*/*/*.exe.
+// Every traversed component is checked; deeper trees are deliberately excluded.
 func discordExes(dir string, note func(error)) []string {
-	ents, err := os.ReadDir(dir)
+	out := directExes(dir, false, note)
+	modules := filepath.Join(dir, "modules")
+	if !plainDir(modules, note) {
+		return out
+	}
+	for _, mod := range boundedEntries(modules, note) {
+		p := filepath.Join(modules, mod.Name())
+		if !plainDir(p, note) {
+			continue
+		}
+		for _, sub := range boundedEntries(p, note) {
+			q := filepath.Join(p, sub.Name())
+			if plainDir(q, note) {
+				out = append(out, directExes(q, false, note)...)
+				if len(out) > MaxPathsPerProfile {
+					note(ErrCapReached)
+					return out[:MaxPathsPerProfile]
+				}
+			}
+		}
+	}
+	return out
+}
+
+func boundedEntries(dir string, note func(error)) []os.DirEntry {
+	return readEntries(dir, 64, note)
+}
+
+func readEntries(dir string, limit int, note func(error)) []os.DirEntry {
+	f, err := os.Open(dir)
 	if err != nil {
 		note(err)
 		return nil
 	}
+	defer f.Close()
+	ents, err := f.ReadDir(limit + 1)
+	if err != nil && !errors.Is(err, io.EOF) {
+		note(err)
+	}
+	if len(ents) > limit {
+		note(ErrCapReached)
+		ents = ents[:limit]
+	}
+	sort.Slice(ents, func(i, j int) bool { return ents[i].Name() < ents[j].Name() })
+	return ents
+}
+
+func plainDir(p string, note func(error)) bool {
+	fi, err := lstatPlain(p)
+	if err != nil {
+		note(err)
+		return false
+	}
+	return fi.IsDir()
+}
+
+func installNames(_ string, _ func(error)) []string { return manifest.Roots() }
+
+func installerExes(dir string, note func(error)) []string { return directExes(dir, true, note) }
+
+func directExes(dir string, installers bool, note func(error)) []string {
+	ents := boundedEntries(dir, note)
 	var out []string
 	for _, e := range ents {
 		n := strings.ToLower(e.Name())
-		if !strings.HasPrefix(n, "discord") || !strings.HasSuffix(n, ".exe") {
+		if !strings.HasSuffix(n, ".exe") || (installers && (!strings.HasPrefix(n, "discord") || !strings.Contains(n, "setup"))) {
 			continue
 		}
 		p := filepath.Join(dir, e.Name())
-		if !isPlainFile(p, note) {
+		if (installers && !manifest.Accepts(p)) || !isPlainFile(p, note) {
 			continue
 		}
 		if len(out) >= MaxExesPerDir {
@@ -228,7 +298,7 @@ profiles:
 			}
 		}
 		out = append(out, WatchTarget{Path: local})
-		for _, name := range InstallDirNames {
+		for _, name := range append(installNames(local, func(error) {}), "SquirrelTemp") {
 			inst := filepath.Join(local, name)
 			if fi, err := lstatPlain(inst); err == nil && fi.IsDir() {
 				out = append(out, WatchTarget{Path: inst, Subtree: true})

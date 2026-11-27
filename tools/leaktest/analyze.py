@@ -1,15 +1,25 @@
-"""Offline physical-NIC leak indicators. Python stdlib only; use python -I."""
+"""Offline NIC/TUN scenario evidence classifier. Stdlib only; use python -I."""
 import argparse
 import ipaddress
 import json
 import re
 import struct
 import sys
+from datetime import datetime
 from pathlib import Path
 
-DOMAINS = ('discord.com', 'discord.gg', 'discordapp.com', 'discordapp.net',
-           'discord.media', 'discordcdn.com', 'discordsays.com', 'dis.gd',
-           'discord.gift', 'discord.dev', 'discordstatus.com', 'discord.co', 'discord.new')
+def domain_inventory(source=None):
+    source = source or Path(__file__).resolve().parents[2] / 'internal/engine/config.go'
+    text = source.read_text(encoding='utf-8')
+    def values(symbol):
+        match = re.search(r'var\s+' + symbol + r'\s*=\s*\[\]string\s*\{([^}]+)\}', text)
+        if not match:
+            raise ValueError('Engine domain inventory unavailable')
+        return tuple(re.findall(r'"([^"\n]+)"', re.sub(r'//[^\n]*', '', match[1])))
+    return values('DiscordDomains'), values('DiscordHosts')
+
+
+DOMAINS, HOSTS = domain_inventory()
 MAX_BLOCK = 32 * 1024 * 1024
 MAX_STREAM = 256 * 1024
 
@@ -20,7 +30,7 @@ class ParseError(ValueError):
 
 def discord(name):
     name = name.lower().rstrip('.')
-    return any(name == d or name.endswith('.' + d) for d in DOMAINS)
+    return name in HOSTS or any(name == d or name.endswith('.' + d) for d in DOMAINS)
 
 
 def exact(f, n):
@@ -30,7 +40,22 @@ def exact(f, n):
     return b
 
 
-def packets(path):
+def options(data, endian):
+    result = {}
+    while data:
+        if len(data) < 4:
+            raise ParseError('Short pcapng option')
+        code, size = struct.unpack(endian + 'HH', data[:4])
+        if code == 0:
+            break
+        if 4 + ((size + 3) & ~3) > len(data):
+            raise ParseError('Truncated pcapng option')
+        result[code] = data[4:4 + size]
+        data = data[4 + ((size + 3) & ~3):]
+    return result
+
+
+def packets(path, detailed=False):
     """Yield (linktype, captured bytes, original length), checking container bounds."""
     with open(path, 'rb') as f:
         magic = exact(f, 4)
@@ -49,10 +74,13 @@ def packets(path):
                     return
                 if len(h) != 16:
                     raise ParseError('Truncated pcap record')
-                _, _, cap, orig = struct.unpack(e + 'IIII', h)
+                sec, sub, cap, orig = struct.unpack(e + 'IIII', h)
                 if cap > MAX_BLOCK or cap > snap or cap > orig:
                     raise ParseError('Invalid pcap packet length')
-                yield link, exact(f, cap), orig
+                frame = exact(f, cap)
+                yield (dict(link=link, frame=frame, original=orig, interface=0,
+                            timestamp=sec + sub / (1e9 if magic in (b'\x4d\x3c\xb2\xa1', b'\xa1\xb2\x3c\x4d') else 1e6),
+                            direction=0) if detailed else (link, frame, orig))
         elif magic == b'\x0a\x0d\x0d\x0a':
             f.seek(0)
             e, interfaces = None, []
@@ -85,7 +113,11 @@ def packets(path):
                     if len(b) < 8:
                         raise ParseError('Short interface block')
                     link, _, snap = struct.unpack(e + 'HHI', b[:8])
-                    interfaces.append((link, snap))
+                    opts = options(b[8:], e)
+                    resolution = opts.get(9, b'\x06')[0]
+                    scale = (2 ** -(resolution & 127)) if resolution & 128 else 10 ** -resolution
+                    offset = struct.unpack(e + 'q', opts[14])[0] if 14 in opts else 0
+                    interfaces.append((link, snap, scale, offset))
                 elif kind in (2, 6):
                     if len(b) < 20:
                         raise ParseError('Short packet block')
@@ -93,19 +125,33 @@ def packets(path):
                     cap, orig = struct.unpack(e + 'II', b[12:20])
                     if idx >= len(interfaces) or cap > orig or 20 + ((cap + 3) & ~3) > len(b):
                         raise ParseError('Invalid packet block')
-                    link, snap = interfaces[idx]
+                    link, snap, scale, offset = interfaces[idx]
                     if snap and cap > snap:
                         raise ParseError('Packet exceeds snaplen')
-                    yield link, b[20:20 + cap], orig
+                    opts = options(b[20 + ((cap + 3) & ~3):], e)
+                    flags = struct.unpack(e + 'I', opts.get(2, b'\0' * 4))[0]
+                    if (kind == 2 and struct.unpack(e + 'H', b[2:4])[0] not in (0, 65535)) or (4 in opts and any(opts[4])) or flags & 0xffff0000:
+                        raise ParseError('Packet drops or receive errors detected')
+                    high, low = struct.unpack(e + 'II', b[4:12])
+                    yield (dict(link=link, frame=b[20:20 + cap], original=orig, interface=idx,
+                                timestamp=((high << 32) | low) * scale + offset,
+                                direction=flags & 3) if detailed else (link, b[20:20 + cap], orig))
+                elif kind == 5:
+                    if len(b) < 12:
+                        raise ParseError('Short interface statistics')
+                    stats = options(b[12:], e)
+                    if any(any(stats.get(code, b'')) for code in (5, 7)):
+                        raise ParseError('Interface drops detected')
                 elif kind == 3:
                     if len(b) < 4 or not interfaces:
                         raise ParseError('Invalid simple packet block')
                     orig = struct.unpack(e + 'I', b[:4])[0]
-                    link, snap = interfaces[0]
+                    link, snap, _, _ = interfaces[0]
                     cap = min(orig, snap or orig)
                     if len(b) != 4 + ((cap + 3) & ~3):
                         raise ParseError('Invalid simple packet length')
-                    yield link, b[4:4 + cap], orig
+                    yield (dict(link=link, frame=b[4:4 + cap], original=orig, interface=0,
+                                timestamp=None, direction=0) if detailed else (link, b[4:4 + cap], orig))
         else:
             raise ParseError('Unknown capture format')
 
@@ -125,7 +171,7 @@ def network(frame):
             return None
         ihl = (b[0] & 15) * 4
         length = int.from_bytes(b[2:4], 'big')
-        if ihl < 20 or length < ihl or len(b) < ihl:
+        if ihl < 20 or length < ihl or len(b) < length:
             return None
         src, dst = (str(ipaddress.ip_address(x)) for x in (b[12:16], b[16:20]))
         frag = int.from_bytes(b[6:8], 'big') & 0x3fff
@@ -135,6 +181,8 @@ def network(frame):
             return None
         src, dst = (str(ipaddress.ip_address(x)) for x in (b[8:24], b[24:40]))
         end = 40 + int.from_bytes(b[4:6], 'big')
+        if len(b) < end:
+            return None
         b = b[:end]
         proto, pos, frag = b[6], 40, False
         for _ in range(16):
@@ -147,7 +195,7 @@ def network(frame):
             if pos + size > len(b):
                 return None
             if proto == 44:
-                frag = bool(int.from_bytes(b[pos + 2:pos + 4], 'big') & 0xfff9)
+                frag = True  # Includes atomic fragments: this parser does not certify fragments.
             proto, pos = nxt, pos + size
     return None
 
@@ -250,7 +298,7 @@ def http_names(b):
             for m in re.findall(rb'(?im)^Host:[ \t]*([^\r\n]+)\r\n', headers + b'\r\n')]
 
 
-def analyze(path, metadata=None, local_ips=()):
+def analyze(path, metadata=None, local_ips=(), private=False):
     meta = metadata or {}
     locals_ = {str(ipaddress.ip_address(x)) for x in [*meta.get('local_ips', []), *local_ips]}
     ep = meta.get('wireguard_endpoint')
@@ -267,6 +315,8 @@ def analyze(path, metadata=None, local_ips=()):
         warnings.add('Capture metadata marks this run incomplete.')
 
     def mask(ip):
+        if private:
+            return ip
         return '<local>' if not locals_ or ip in locals_ else ip
 
     r = dict(total_packets=0, wireguard_packets=0, ipv6_packets=0, ipv6_noise_packets=0,
@@ -274,7 +324,7 @@ def analyze(path, metadata=None, local_ips=()):
              dns_queries=[], tls_sni=[], http_hosts=[], quic_flows=[], indicators=[])
     streams, quic, seen = {}, {}, set()
 
-    def emit(kind, name, src, dst, sport, dport, wg):
+    def emit(kind, name, src, dst, sport, dport, wg, proto=6):
         name = name.lower().rstrip('.')
         key = kind, name, src, dst, sport, dport, wg
         if key in seen:
@@ -292,7 +342,7 @@ def analyze(path, metadata=None, local_ips=()):
             except ValueError:
                 pass
         entry = dict(name=name, src=mask(src), dst=mask(dst), src_port=sport,
-                     dst_port=dport, discord=is_discord, wireguard=wg)
+                     dst_port=dport, proto=proto, discord=is_discord, wireguard=wg)
         r[kind].append(entry)
         if entry['discord'] and not wg:
             r['indicators'].append(dict(kind=kind, **entry))
@@ -333,7 +383,7 @@ def analyze(path, metadata=None, local_ips=()):
             if 53 in (sport, dport):
                 try:
                     for name in dns_queries(data):
-                        emit('dns_queries', name, src, dst, sport, dport, wg)
+                        emit('dns_queries', name, src, dst, sport, dport, wg, proto=17)
                 except ValueError:
                     warnings.add('Incomplete or malformed DNS query skipped.')
             if dport == 443:
@@ -410,45 +460,274 @@ def analyze(path, metadata=None, local_ips=()):
     if r['fragmented_packets']:
         warnings.add('IP fragments counted but not reassembled.')
     r['warnings'] = sorted(warnings)
-    r['exit_code'] = 2 if r['indicators'] else 0
+    r['result'] = 'INCONCLUSIVE'
+    r['exit_code'] = 0  # Analysis ran; never a security exit status.
     return r
+
+
+def epoch(value):
+    return float(value) if isinstance(value, (int, float)) else datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp()
+
+
+def json_lines(path):
+    return [json.loads(line) for line in path.read_text(encoding='utf-8-sig').splitlines() if line.strip()]
+
+
+def executable_inventory(source=None):
+    source = source or Path(__file__).with_name('executable_manifest.json')
+    data = json.loads(source.read_text(encoding='utf-8-sig'))
+    if data.get('version') != 1 or not data.get('roots') or not data.get('path_regex'):
+        raise ValueError('Executable manifest unavailable')
+    re.compile(data['path_regex'])
+    return data
+
+
+EXECUTABLE_MANIFEST = executable_inventory()
+
+
+def protected(exe, inventory=None):
+    exe = exe.replace('/', '\\')
+    if any(part in ('.', '..') for part in exe.split('\\')):
+        return False
+    return bool(re.search((inventory or EXECUTABLE_MANIFEST)['path_regex'], exe))
+
+
+def analyze_run(manifest_path, review=None):
+    """Private evidence report. Review is explicit supplementary evidence, never inferred."""
+    root = manifest_path.resolve().parent
+    meta = json.loads(manifest_path.read_text(encoding='utf-8-sig'))
+    review = review or {}
+    issues, leaks, flows = set(), [], []
+    inventory = meta.get('executable_manifest')
+    if inventory != EXECUTABLE_MANIFEST:
+        issues.add('executable_manifest_missing_or_mismatched')
+        inventory = EXECUTABLE_MANIFEST
+    snapshots = json_lines(root / 'snapshots.jsonl')
+    controls = json_lines(root / 'controls.jsonl') if (root / 'controls.jsonl').exists() else []
+    if not meta.get('capture_complete'):
+        issues.add('incomplete_capture')
+    if not snapshots:
+        issues.add('missing_process_inventory')
+    if not meta.get('started') or not meta.get('ended'):
+        issues.add('missing_run_window')
+    # An explicit capture-owned operator marker attests policy applied + tunnel up.
+    activation = None
+    marker = meta.get('activation', {})
+    try:
+        boundary = epoch(marker['time'])
+        if (marker.get('source') == 'capture_operator_confirmation'
+                and marker.get('policy_applied') is True and marker.get('tunnel_up') is True
+                and epoch(meta['started']) <= boundary <= epoch(meta['ended'])):
+            activation = boundary
+    except (KeyError, TypeError, ValueError, OverflowError):
+        pass
+    if activation is None:
+        issues.add('verified_activation_boundary_missing')
+    if meta.get('scenario') not in ['L' + str(i) for i in range(1, 15)]:
+        issues.add('unknown_scenario')
+    if meta.get('scenario') in ('L9', 'L10'):
+        issues.add('external_continuity_not_analyzed')
+    for field in ('loss_checked', 'coverage_checked', 'scenario_stimulus_observed', 'encrypted_metadata_checked', 'outer_correlation_checked'):
+        if review.get(field) is not True:
+            issues.add(field + '_not_reviewed')
+    if review.get('capture_loss', True):
+        issues.add('capture_loss_or_unknown')
+    if meta.get('inventory_errors'):
+        issues.add('inventory_errors')
+    for prev, cur in zip(snapshots, snapshots[1:]):
+        if not 0 < epoch(cur['time']) - epoch(prev['time']) <= meta.get('max_snapshot_gap', 5):
+            issues.add('snapshot_gap')
+    if snapshots and meta.get('started') and meta.get('ended'):
+        if (epoch(snapshots[0]['time']) - epoch(meta['started']) > meta.get('max_snapshot_gap', 5)
+                or epoch(meta['ended']) - epoch(snapshots[-1]['time']) > meta.get('max_snapshot_gap', 5)):
+            issues.add('inventory_window_gap')
+    interfaces = meta.get('interfaces', [])
+    physical = {int(i['if_index']) for i in interfaces if i['kind'] == 'physical'}
+    for snapshot in snapshots:
+        if not set(snapshot['active_physical']).issubset(physical):
+            issues.add('physical_interface_not_captured')
+    if not physical or not any(i['kind'] == 'tun' for i in interfaces):
+        issues.add('missing_physical_or_tun')
+    peers = [(epoch(s['time']), s.get('peer')) for s in snapshots]
+    if any(not p for _, p in peers):
+        issues.add('missing_runtime_peer')
+
+    def owner(time, proto, src, sport, dst, dport):
+        # Use both neighbouring samples, bounded in time. PID reuse is distinguished by start time.
+        candidates = {}
+        for snap in snapshots:
+            if abs(epoch(snap['time']) - time) > meta.get('max_snapshot_gap', 5):
+                continue
+            procs = {int(p['pid']): p for p in snap['processes']}
+            for sock in snap['sockets']:
+                if sock['proto'] != proto or int(sock['local_port']) != sport or sock['local_ip'] not in (src, '0.0.0.0', '::'):
+                    continue
+                if proto == 6 and (sock['remote_ip'], int(sock['remote_port'])) != (dst, dport):
+                    continue
+                p = procs.get(int(sock['pid']))
+                if p and p.get('exe') and p.get('started') and epoch(p['started']) <= time:
+                    candidates[(p['pid'], p['started'])] = p
+        return next(iter(candidates.values())) if len(candidates) == 1 else None
+
+    for iface in interfaces:
+        files = iface.get('pcapng', [])
+        if not files:
+            issues.add('interface_capture_missing')
+        count = 0
+        for filename in iface.get('drops_pcapng', []):
+            try:
+                if any(packets(root / filename)):
+                    issues.add('packet_drops')
+            except (OSError, ValueError, struct.error):
+                issues.add('invalid_drop_capture')
+        if not iface.get('drops_pcapng'):
+            issues.add('drop_evidence_missing')
+        for filename in files:
+            try:
+                indicators = analyze(root / filename, {'local_ips': iface['local_ips']}, private=True)
+                named = {(x['src'], x['src_port'], x['dst'], x['dst_port'], x['proto']) for x in indicators['indicators']}
+                if any('skipped' in w or 'gap' in w or 'limit reached' in w for w in indicators['warnings']):
+                    issues.add('protocol_parse_gap')
+                for packet in packets(root / filename, detailed=True):
+                    count += 1
+                    if len(packet['frame']) < packet['original']:
+                        issues.add('truncation')
+                    if packet['timestamp'] is None:
+                        issues.add('missing_timestamp')
+                        continue
+                    if packet['link'] != 1:
+                        issues.add('unsupported_linktype')
+                        continue
+                    net = network(packet['frame'])
+                    if not net:
+                        # ARP is normal; other unparsed packets cannot prove absence.
+                        if packet['frame'][12:14] != b'\x08\x06':
+                            issues.add('unparsed_network_packet')
+                        continue
+                    version, src, dst, proto, data, fragment = net
+                    if fragment:
+                        issues.add('fragments')
+                        continue
+                    direction = ('out' if src in iface['local_ips'] else 'in' if dst in iface['local_ips'] else 'unknown')
+                    if direction == 'unknown':
+                        issues.add('unknown_direction')
+                    if packet['direction'] in (1, 2) and direction != ('in' if packet['direction'] == 1 else 'out'):
+                        issues.add('direction_disagreement')
+                    if proto not in (6, 17):
+                        if not (proto == 58 and data and data[0] in (130, 131, 132, 133, 134, 135, 136, 137, 143)):
+                            issues.add('unattributed_non_transport')
+                        continue
+                    if len(data) < (20 if proto == 6 else 8):
+                        issues.add('short_transport')
+                        continue
+                    sport, dport = struct.unpack('!HH', data[:4])
+                    offset = (data[12] >> 4) * 4 if proto == 6 else 8
+                    if offset < (20 if proto == 6 else 8) or offset > len(data) or (proto == 17 and int.from_bytes(data[4:6], 'big') != len(data)):
+                        issues.add('malformed_transport')
+                        continue
+                    timestamp = packet['timestamp']
+                    if meta.get('started') and meta.get('ended') and not epoch(meta['started']) <= timestamp <= epoch(meta['ended']):
+                        issues.add('packet_outside_run_window')
+                    if not snapshots or min(abs(epoch(s['time']) - timestamp) for s in snapshots) > meta.get('max_snapshot_gap', 5):
+                        issues.add('packet_inventory_gap')
+                    peer = next((p for t, p in reversed(peers) if t <= timestamp), None)
+                    wg = bool(proto == 17 and peer and dst == peer['ip'] and dport == int(peer['port']) and data[8:12] == b'\x04\0\0\0' and len(data) >= 40)
+                    process = owner(timestamp, proto, src, sport, dst, dport) if direction == 'out' else owner(timestamp, proto, dst, dport, src, sport)
+                    f = dict(id=len(flows), time=timestamp, if_index=iface['if_index'], kind=iface['kind'],
+                             phase='unverified' if activation is None else 'baseline' if timestamp < activation else 'protected',
+                             direction=direction, direction_basis='interface_address_inventory', pcapng_direction=packet['direction'],
+                             src=src, dst=dst, sport=sport, dport=dport, proto=proto, process=process,
+                             wireguard_transport_candidate=wg, control_nonce=None)
+                    for c in controls:
+                        if (proto == 17 and src == c['local_ip'] and sport == c['local_port'] and dst == c['remote_ip'] and dport == c['remote_port']
+                                and data[8:] == c['nonce'].encode('ascii') and epoch(c['started']) <= timestamp <= epoch(c['ended'])):
+                            f['control_nonce'] = c['nonce']
+                    flows.append(f)
+                    if direction == 'out' and not process:
+                        issues.add('unattributed_' + ('physical' if iface['kind'] == 'physical' else 'tun') + '_flow')
+                    if iface['kind'] != 'physical' or direction != 'out':
+                        continue
+                    if activation is None or timestamp < activation:
+                        continue  # Retain baseline evidence; it is not a post-activation leak.
+                    related = (src, sport, dst, dport, proto) in named or review.get('flow_labels', {}).get(str(f['id'])) == 'discord'
+                    if process and protected(process['exe'], inventory):
+                        leaks.append(f['id'])
+                    elif not process:
+                        issues.add('unattributed_physical_flow')
+                    elif wg:
+                        continue  # Candidate only; explicit outer/receiver review still required.
+                    elif related:
+                        leaks.append(f['id'])
+                    elif not f['control_nonce'] and review.get('flow_labels', {}).get(str(f['id'])) != 'unrelated':
+                        issues.add('opaque_flow_requires_telemetry')
+            except (OSError, ValueError, KeyError, struct.error):
+                issues.add('capture_parse_error_or_drops')
+        if not count:
+            issues.add('empty_interface_capture')
+
+    for mode in ('direct', 'tunnel'):
+        valid = False
+        for c in controls:
+            if c['mode'] != mode:
+                continue
+            matching = [f for f in flows if f['control_nonce'] == c['nonce'] and f['direction'] == 'out' and f['phase'] == 'protected']
+            expected = 'physical' if mode == 'direct' else 'tun'
+            observed = [f for f in matching if f['kind'] == expected and f['process'] and f['process']['pid'] == c['pid'] and f['process']['started'] == c['process_started'] and not protected(f['process']['exe'], inventory)]
+            if mode == 'tunnel' and any(f['kind'] == 'physical' for f in matching):
+                leaks.extend(f['id'] for f in matching if f['kind'] == 'physical')
+            outer = any(f['kind'] == 'physical' and f['direction'] == 'out' and f['wireguard_transport_candidate'] and epoch(c['started']) <= f['time'] <= epoch(c['ended']) for f in flows)
+            # Receiver telemetry binds the nonce to the remote observation; concurrent WG UDP alone cannot.
+            receipt = review.get('tunnel_receipts', {}).get(c['nonce'], {})
+            correlation = receipt.get('received_via_tunnel') is True and bool(receipt.get('evidence'))
+            if observed and (mode == 'direct' or (outer and correlation and not any(f['kind'] == 'physical' for f in matching))):
+                valid = True
+        if not valid:
+            issues.add(mode + '_positive_control_missing')
+    # Quality gates take precedence; confirmed leak records are retained even on an incomplete run.
+    return dict(scenario=meta.get('scenario'), result='INCONCLUSIVE' if issues else 'FAIL' if leaks else 'PASS',
+                scope='verified activation boundary through run end only', activation=activation,
+                baseline=[f['id'] for f in flows if f['phase'] == 'baseline'],
+                issues=sorted(issues), leaks=sorted(set(leaks)), flows=flows, exit_code=0)
+
+
+def redacted(report):
+    # Allowlist only enums and counts: no free text, addresses, exe paths, usernames or nonces.
+    return dict(scenario=report['scenario'] if report['scenario'] in ['L' + str(i) for i in range(1, 15)] else 'unknown',
+                result=report['result'], packet_records=len(report['flows']), confirmed_leaks=len(report['leaks']),
+                baseline_records=len(report['baseline']),
+                issues=report['issues'], exit_code=0)
 
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('capture', type=Path)
-    p.add_argument('--metadata', type=Path, help='Default: capture basename + .json')
-    p.add_argument('--local-ip', action='append', default=[], help='Local interface IP; repeatable')
-    p.add_argument('--json', type=Path, help='Default: capture basename + .report.json')
+    p.add_argument('capture', type=Path, help='Private run.json manifest')
+    p.add_argument('--review', type=Path, help='Private operator review/telemetry JSON')
+    p.add_argument('--export', type=Path, help='Separate allowlisted redacted JSON')
+    p.add_argument('--json', type=Path, help='Private report; default beside run.json')
     args = p.parse_args(argv)
     output = args.json or args.capture.with_suffix('.report.json')
-    metadata = args.metadata or args.capture.with_suffix('.json')
-    if output.resolve() in (args.capture.resolve(), metadata.resolve()):
-        print('Parse error: report path would overwrite capture or metadata.', file=sys.stderr)
-        return 1
     try:
-        meta = json.loads(metadata.read_text(encoding='utf-8-sig')) if metadata.exists() else {}
-        if args.metadata and not metadata.exists():
-            raise ParseError('Requested metadata file is missing')
-        report = analyze(args.capture, meta, args.local_ip)
+        repo = Path(__file__).resolve().parents[2]
+        targets = [args.capture, output] + ([args.export] if args.export else [])
+        if any(t.resolve() == repo or repo in t.resolve().parents for t in targets):
+            raise ParseError('Private evidence must be outside repository')
+        if output.resolve() == args.capture.resolve() or (args.review and output.resolve() == args.review.resolve()):
+            raise ParseError('Output would overwrite input')
+        if args.export and (args.export.resolve() in (args.capture.resolve(), output.resolve()) or (args.review and args.export.resolve() == args.review.resolve())):
+            raise ParseError('Export would overwrite input')
+        if output.exists() or (args.export and args.export.exists()):
+            raise ParseError('Refusing to overwrite existing evidence')
+        review = json.loads(args.review.read_text(encoding='utf-8-sig')) if args.review else {}
+        report = analyze_run(args.capture, review)
         output.write_text(json.dumps(report, ensure_ascii=True, indent=2) + '\n', encoding='utf-8')
+        if args.export:
+            args.export.write_text(json.dumps(redacted(report), indent=2) + '\n', encoding='utf-8')
     except (OSError, ValueError, KeyError, TypeError, AttributeError, struct.error):
         # Do not echo exceptions: attacker-controlled bytes, paths or raw IPs may be present.
         print('Parse error: invalid/unreadable capture or metadata, or report write failed.', file=sys.stderr)
         return 1
-    print('Packets: {total_packets}; WireGuard: {wireguard_packets}; IPv6: {ipv6_packets}; IPv6 ND/MLD noise: {ipv6_noise_packets}; truncated: {truncated_packets}'.format(**report))
-    for kind in ('dns_queries', 'tls_sni', 'http_hosts'):
-        print('{}: {}'.format(kind, len(report[kind])))
-        for item in report[kind]:
-            # JSON escaping prevents names from injecting terminal controls or extra lines.
-            print('  {} {} -> {}:{} {}'.format(json.dumps(item['name']), item['src'], item['dst'], item['dst_port'], 'DISCORD' if item['discord'] else ''))
-    for flow in report['quic_flows']:
-        print('UDP443 {} -> {}:443; packets={}; SNI unparsed'.format(flow['src'], flow['dst'], flow['packets']))
-    for warning in report['warnings']:
-        print('Warning: ' + warning)
-    print('Discord leak indicators: {}; exit {}'.format(len(report['indicators']), report['exit_code']))
-    print('JSON report written (capture directory by default).')
-    return report['exit_code']
+    print(json.dumps(redacted(report)))
+    return 0
 
 
 if __name__ == '__main__':

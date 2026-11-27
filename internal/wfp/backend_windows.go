@@ -67,9 +67,11 @@ func (s *winSession) Close() error {
 	if s.h == 0 {
 		return nil
 	}
-	err := fwpmEngineClose0(s.h)
+	if err := fwpmEngineClose0(s.h); err != nil {
+		return err
+	}
 	s.h = 0
-	return err
+	return nil
 }
 
 // Begin opens a read-write transaction (flags 0). BFE serialises

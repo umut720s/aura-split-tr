@@ -13,6 +13,7 @@ import (
 // fakePolicy records the calls Guard makes and models the persistent set
 // (add-only keeps, authoritative replaces).
 type fakePolicy struct {
+	verifyErr  error
 	mu         sync.Mutex
 	events     []string
 	applyErr   error
@@ -21,6 +22,8 @@ type fakePolicy struct {
 	set        []string
 	n          int
 }
+
+func (p *fakePolicy) Verify([]string) error { return p.verifyErr }
 
 func (p *fakePolicy) add(e string) { p.events = append(p.events, e) }
 
@@ -52,9 +55,10 @@ func (p *fakePolicy) Apply(paths []string, mode ApplyMode) (ApplyResult, error) 
 }
 
 type fakePermit struct {
-	p     *fakePolicy
-	name  string
-	paths []string
+	p        *fakePolicy
+	name     string
+	paths    []string
+	closeErr error
 }
 
 func (c *fakePermit) Paths() []string { return c.paths }
@@ -63,7 +67,7 @@ func (c *fakePermit) Close() error {
 	c.p.mu.Lock()
 	defer c.p.mu.Unlock()
 	c.p.add("close " + c.name)
-	return nil
+	return c.closeErr
 }
 
 func (p *fakePolicy) PermitOnTunnel(luid uint64, paths []string) (Permit, error) {
@@ -107,9 +111,9 @@ func (p *fakePolicy) reset() {
 	p.mu.Unlock()
 }
 
-func TestGuardReconcileOnlyOnChange(t *testing.T) {
+func TestGuardReconcileReadsBackUnchangedInventory(t *testing.T) {
 	p := &fakePolicy{}
-	found := []string{`C:\a\Update.exe`}
+	found := []string{`C:\Users\fixture\AppData\Local\Discord\Update.exe`}
 	var derr error
 	g := NewGuard(p, func() ([]string, error) { return found, derr }, nil, nil)
 	for i := 0; i < 3; i++ {
@@ -117,17 +121,17 @@ func TestGuardReconcileOnlyOnChange(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if got := p.get(); got != "apply 1 authoritative" {
+	if got := p.get(); strings.Count(got, "apply 1 authoritative") != 3 {
 		t.Fatalf("events %q", got)
 	}
-	found = []string{`C:\A\UPDATE.EXE`} // case-only change is no change
+	found = []string{`C:\Users\fixture\AppData\Local\DISCORD\UPDATE.EXE`} // case-only change is no change
 	_ = g.Reconcile()
-	if got := p.get(); got != "apply 1 authoritative" {
+	if got := p.get(); strings.Count(got, "apply 1 authoritative") != 4 {
 		t.Fatalf("events %q", got)
 	}
 	// A discovery error makes the pass add-only: nothing is dropped.
 	p.reset()
-	found, derr = []string{`C:\b\Update.exe`}, errors.New("access denied")
+	found, derr = []string{`C:\Users\fixture\AppData\Local\DiscordPTB\Update.exe`}, errors.New("access denied")
 	if err := g.Reconcile(); !errors.Is(err, ErrIncomplete) {
 		t.Fatalf("Reconcile = %v", err)
 	}
@@ -148,7 +152,7 @@ func TestGuardReconcileOnlyOnChange(t *testing.T) {
 func TestGuardApplyFailureIsRetried(t *testing.T) {
 	p := &fakePolicy{applyErr: errors.New("bfe down")}
 	var last Status
-	g := NewGuard(p, func() ([]string, error) { return []string{`C:\a\Update.exe`}, nil }, nil, func(s Status) { last = s })
+	g := NewGuard(p, func() ([]string, error) { return []string{`C:\Users\fixture\AppData\Local\Discord\Update.exe`}, nil }, nil, func(s Status) { last = s })
 	if err := g.Reconcile(); err == nil {
 		t.Fatal("expected error")
 	}
@@ -167,7 +171,7 @@ func TestGuardApplyFailureIsRetried(t *testing.T) {
 // Unresolved app IDs: reported as incomplete, never counted as covered,
 // and retried every reconcile although the inventory is unchanged.
 func TestGuardUnresolvedRetried(t *testing.T) {
-	a, c := `C:\a\Update.exe`, `C:\a\app-1\Discord.exe`
+	a, c := `C:\Users\fixture\AppData\Local\Discord\Update.exe`, `C:\Users\fixture\AppData\Local\Discord\app-1\Discord.exe`
 	p := &fakePolicy{unresolved: map[string]bool{c: true}}
 	g := NewGuard(p, func() ([]string, error) { return []string{a, c}, nil }, nil, nil)
 	if err := g.Reconcile(); !errors.Is(err, ErrIncomplete) {
@@ -194,7 +198,7 @@ func TestGuardUnresolvedRetried(t *testing.T) {
 // tunnel started), and closing the handle closes it.
 func TestGuardTunnelPermitLifecycle(t *testing.T) {
 	p := &fakePolicy{}
-	g := NewGuard(p, func() ([]string, error) { return []string{`C:\a\Update.exe`}, nil }, nil, nil)
+	g := NewGuard(p, func() ([]string, error) { return []string{`C:\Users\fixture\AppData\Local\Discord\Update.exe`}, nil }, nil, nil)
 	if err := g.Reconcile(); err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +231,7 @@ func TestGuardTunnelPermitLifecycle(t *testing.T) {
 // before the blocks change and the old permit is closed afterwards.
 func TestGuardPermitSwapOrder(t *testing.T) {
 	p := &fakePolicy{}
-	found := []string{`C:\a\Update.exe`}
+	found := []string{`C:\Users\fixture\AppData\Local\Discord\Update.exe`}
 	g := NewGuard(p, func() ([]string, error) { return found, nil }, nil, nil)
 	_ = g.Reconcile()
 	h, err := g.TunnelUp(9)
@@ -235,7 +239,7 @@ func TestGuardPermitSwapOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.reset()
-	found = []string{`C:\a\Update.exe`, `C:\a\app-2\Discord.exe`}
+	found = []string{`C:\Users\fixture\AppData\Local\Discord\Update.exe`, `C:\Users\fixture\AppData\Local\Discord\app-2\Discord.exe`}
 	if err := g.Reconcile(); err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +258,7 @@ func TestGuardPermitSwapOrder(t *testing.T) {
 // meanwhile.
 func TestGuardPermitFailureRetried(t *testing.T) {
 	p := &fakePolicy{}
-	found := []string{`C:\a\Update.exe`}
+	found := []string{`C:\Users\fixture\AppData\Local\Discord\Update.exe`}
 	g := NewGuard(p, func() ([]string, error) { return found, nil }, nil, nil)
 	_ = g.Reconcile()
 	h, err := g.TunnelUp(4)
@@ -263,7 +267,7 @@ func TestGuardPermitFailureRetried(t *testing.T) {
 	}
 	defer h.Close()
 	p.permitErr = errors.New("no session")
-	found = []string{`C:\a\Update.exe`, `C:\a\app-2\Discord.exe`}
+	found = []string{`C:\Users\fixture\AppData\Local\Discord\Update.exe`, `C:\Users\fixture\AppData\Local\Discord\app-2\Discord.exe`}
 	_ = g.Reconcile()
 	st := g.Status()
 	if !st.Permit || st.PermitComplete || st.PermitApps != 1 || st.Apps != 2 {
@@ -285,19 +289,21 @@ func TestGuardPermitFailureRetried(t *testing.T) {
 	}
 }
 
-// Without an applied policy TunnelUp opens no permit; the next successful
-// reconcile adds it.
+// Without a read-back policy TunnelUp fails; the engine must retry activation.
 func TestGuardTunnelUpBeforeApply(t *testing.T) {
 	p := &fakePolicy{applyErr: errors.New("bfe down")}
-	g := NewGuard(p, func() ([]string, error) { return []string{`C:\a\Update.exe`}, nil }, nil, nil)
+	g := NewGuard(p, func() ([]string, error) { return []string{`C:\Users\fixture\AppData\Local\Discord\Update.exe`}, nil }, nil, nil)
 	_ = g.Reconcile()
-	h, err := g.TunnelUp(3)
-	if err != nil {
-		t.Fatal(err)
+	if h, err := g.TunnelUp(3); err == nil || h != nil {
+		t.Fatal("unapplied policy accepted")
 	}
 	p.applyErr = nil
 	p.reset()
 	if err := g.Reconcile(); err != nil {
+		t.Fatal(err)
+	}
+	h, err := g.TunnelUp(3)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if got := p.get(); got != "apply 1 authoritative|open permit#1 luid=3 apps=1" {
@@ -310,7 +316,7 @@ func TestGuardTunnelUpBeforeApply(t *testing.T) {
 // treats the tunnel start as failed and keeps Discord blocked).
 func TestGuardTunnelUpPermitFailure(t *testing.T) {
 	p := &fakePolicy{}
-	g := NewGuard(p, func() ([]string, error) { return []string{`C:\a\Update.exe`}, nil }, nil, nil)
+	g := NewGuard(p, func() ([]string, error) { return []string{`C:\Users\fixture\AppData\Local\Discord\Update.exe`}, nil }, nil, nil)
 	_ = g.Reconcile()
 	p.permitErr = errors.New("no session")
 	if _, err := g.TunnelUp(5); err == nil {
@@ -324,7 +330,7 @@ func TestGuardTunnelUpPermitFailure(t *testing.T) {
 // Run reconciles shortly after a watcher kick, well before the interval.
 func TestGuardRunKick(t *testing.T) {
 	p := &fakePolicy{}
-	found := []string{`C:\a\Update.exe`}
+	found := []string{`C:\Users\fixture\AppData\Local\Discord\Update.exe`}
 	var mu sync.Mutex
 	g := NewGuard(p, func() ([]string, error) { mu.Lock(); defer mu.Unlock(); return found, nil }, nil, nil)
 	_ = g.Reconcile()
@@ -334,7 +340,7 @@ func TestGuardRunKick(t *testing.T) {
 	done := make(chan struct{})
 	go func() { g.Run(ctx, time.Hour, kick); close(done) }()
 	mu.Lock()
-	found = []string{`C:\a\Update.exe`, `C:\a\app-2\Discord.exe`}
+	found = []string{`C:\Users\fixture\AppData\Local\Discord\Update.exe`, `C:\Users\fixture\AppData\Local\Discord\app-2\Discord.exe`}
 	mu.Unlock()
 	kick <- struct{}{}
 	deadline := time.Now().Add(3 * time.Second)
@@ -353,7 +359,7 @@ func TestGuardRunKick(t *testing.T) {
 // A. Both stay open (status incomplete) until a complete replacement
 // exists, which then retires both.
 func TestGuardPartialPermitKeepsOldSession(t *testing.T) {
-	a, b := `C:\a\Update.exe`, `C:\a\app-2\Discord.exe`
+	a, b := `C:\Users\fixture\AppData\Local\Discord\Update.exe`, `C:\Users\fixture\AppData\Local\Discord\app-2\Discord.exe`
 	p := &fakePolicy{unresolved: map[string]bool{}}
 	found := []string{a}
 	g := NewGuard(p, func() ([]string, error) { return found, nil }, nil, nil)
@@ -409,7 +415,7 @@ func TestGuardPartialPermitKeepsOldSession(t *testing.T) {
 // old sessions and closes the new one: the new executable stays blocked
 // (fail-closed) and the permit is reported incomplete.
 func TestGuardPermitSessionBound(t *testing.T) {
-	a, b, c := `C:\a\Update.exe`, `C:\a\app-2\Discord.exe`, `C:\a\app-3\Discord.exe`
+	a, b, c := `C:\Users\fixture\AppData\Local\Discord\Update.exe`, `C:\Users\fixture\AppData\Local\Discord\app-2\Discord.exe`, `C:\Users\fixture\AppData\Local\Discord\app-3\Discord.exe`
 	p := &fakePolicy{unresolved: map[string]bool{}}
 	found := []string{a}
 	g := NewGuard(p, func() ([]string, error) { return found, nil }, nil, nil)

@@ -31,6 +31,58 @@ Bu denetim build/test/executable/capture çalıştırmadı; servis, WFP, VPN, ro
 
 P0 maddeleri birden çok ayrı PR gerektirebilir; implementasyon kapsamını küçük tutmak güvenlik sözleşmesini küçültmez. Envantere helper eklemek P0-E'nin ilk kısmıdır; ilk-connect/servis-down garantisini tek başına tamamlamaz. Browser'ı açıkça best-effort diye belgelemek yanlış beklentiyi azaltır fakat istenen genel hedefin release gate'ini açmaz.
 
+## P0 progress
+
+2026-11-27 wave-1 inceleme düzeltmeleri; canlı ağ kapanışı **NOT TESTED**,
+genel kamu beta kapısı **KAPALI**. Altı bulgunun kod düzeltmesi, ağ kabulü değildir.
+
+- **P0-A/H:** sınıflar, SCM/TUN/probe/PROTECTION_READY ayrı; Apply/readback,
+  manifest kapsamı, dinamik izin ve eski süreç kapısı tamamlanmadan hazır sayılmaz.
+  Native koşul/weight/AppID içerik drift doğrulaması P1-C olarak açık.
+- **P0-E part 1:** tek Go manifesti yalnızca Discord, DiscordPTB, DiscordCanary,
+  DiscordDevelopment köklerini; kök Update.exe, bilinen app-* istemci/yardımcı
+  göreli yollarını ve kök/SquirrelTemp kurucularını kapsar. Rastgele Discord*
+  kökleri ve bilinmeyen EXE'ler kapsam dışıdır. Engine regex, discovery, süreç
+  kapatma uygunluğu, sınıflar ve leaktest aynı sözleşmeyi kullanır. JSON eşliği
+  regresyon testiyle denetlenir. Reparse denetimi ve mevcut blokları koruyan
+  kapasite sınırları sürer. Enrollment öncesi launch/connect yarışı, protected
+  launch ve kernel seviyesinde reparse TOCTOU sınırı **açık**.
+- **P0-C:** SetTcpEntry ve tüm TCP resetleri kaldırıldı. Her manifest yolunun
+  readback sonrası eşiğinden önce başlayan süreçler kapanana kadar kapı bekler.
+  Okunamayan ilgili süreçler ve çocukları raporlanır; sessizce atılmaz.
+  Otomatik yıkıcı eylem yoktur. Varsayılan Hayır `[y/N]` açık onayından sonra
+  yalnızca tam manifest yolu eşleşen süreç, aynı handle üzerinden yol tekrar
+  okunarak TerminateProcess ile kapatılır. Yol eşliği yayıncı/imza doğrulaması
+  veya paket sahipliği garantisi değildir. Snapshot yarışları sürer.
+- **P0-B:** analyzer üretilen executable manifestini kullanır ve run.json'daki
+  kopyası eksik/farklıysa INCONCLUSIVE verir. Fiziksel kayıt koruma aktivasyonu
+  öncesinde başlayabilir; TUN sonradan doğrulanmış bileşen eşlemesiyle eklenir.
+  Gerekli TUN/paket kanıtı hiç görünmezse INCONCLUSIVE kalır.
+
+Regresyon testleri sentetiktir. `internal/wfp` ve `internal/paths` test binary'leri
+yerelde çalıştırılmaz; CI içindir. WFP/BFE, servis/recover/setup, süreç kapatma,
+IPv4/IPv6/UDP retirement, gerçek helper/update ve capture kabulü **NOT TESTED**.
+P0-D/F/G ve genel release kabul matrisi bu düzeltmelerle kapanmaz.
+
+### İkinci inceleme sonrası düzeltme kapsamı
+
+Kanonik olmayan tutulan bloklar tünel permitlerine taşınmaz. Default Discord
+basename ve kurucu regex yönlendirmesi geri yüklenmiştir; manifest dışı yollar
+`routed-not-fail-closed` durumudur, doğrulanmış kapsam değildir.
+Eski akış eşikleri kesintisiz doğrulanmış enrollment nesillerine aittir;
+retirement/prune veya discovery/Apply/readback kaybında iptal edilir. Apply öncesi
+readback, aynı turda onarılan kaybı da yeni nesil yapar; recover yeni kapı kurar.
+Süreç ilgisi PID/oluşturulma zamanı kimliğiyle tutulur. Okunamayan koruma öncesi
+ve ebeveyn zinciri bilinmeyen süreçler PID/adıyla bekleme nedeni gösterilir;
+kimlik çözülünce veya süreç kapanınca bekleme biter. İlgisiz erişilemeyen orphan
+bekletebilir; Discord restartı yalnızca Discord süreçlerini emekliye ayırır.
+Başlangıç zamanı hiç okunamıyorsa snapshot arası gizli PID değişimi ayırt edilemez;
+bilinmeyen okunabilir özel EXE'ler ve launch yarışı hâlâ artık sınırdır.
+Leaktest aktivasyon onay işaretinden önceki akışları temel kayıt olarak saklar;
+sızıntı ve pozitif kontroller yalnızca işaret-son aralığında değerlendirilir.
+İşaret eksik/geçersizse INCONCLUSIVE; politika doğrulaması operatör beyanıdır.
+Canlı kabul ve genel release kapısı değişmez: **NOT TESTED / KAPALI**.
+
 ## P1 — kalıcılık, hata geri dönüşü ve non-Discord sürekliliği
 
 | İş / bağlı bulgu | Teknik değişiklik | Bağımlılık | Canlı kapanış |
