@@ -68,11 +68,27 @@ jobs:
       - name: go vet (release tags)
         run: go vet -tags $env:BUILD_TAGS ./...
 
+      # Failures are also emitted as workflow annotations so they are visible
+      # on the run page without signing in (public repository).
       - name: go test (default tags)
-        run: go test -count=1 ./...
+        run: |
+          $out = go test -count=1 ./... 2>&1
+          $code = $LASTEXITCODE
+          $out
+          if ($code -ne 0) {
+            $out | Select-String -Pattern '--- FAIL|^FAIL|panic:|_test\.go:\d+' | Select-Object -First 40 | ForEach-Object { Write-Output ("::error title=go test (default tags)::" + $_.Line) }
+          }
+          exit $code
 
       - name: go test (release tags)
-        run: go test -count=1 -tags $env:BUILD_TAGS ./...
+        run: |
+          $out = go test -count=1 -tags $env:BUILD_TAGS ./... 2>&1
+          $code = $LASTEXITCODE
+          $out
+          if ($code -ne 0) {
+            $out | Select-String -Pattern '--- FAIL|^FAIL|panic:|_test\.go:\d+' | Select-Object -First 40 | ForEach-Object { Write-Output ("::error title=go test (release tags)::" + $_.Line) }
+          }
+          exit $code
 
       - name: staticcheck
         run: go run "honnef.co/go/tools/cmd/staticcheck@$env:STATICCHECK_VERSION" -tags $env:BUILD_TAGS ./...
